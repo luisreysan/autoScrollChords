@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   description: "Guitar chord sheets with auto-scroll and optional multi-device sync.",
 };
 
+/** Turso / Drizzle require Node — avoid Edge for pages that touch the database. */
+export const runtime = "nodejs";
+
 export default function RootLayout({
   children,
 }: Readonly<{
