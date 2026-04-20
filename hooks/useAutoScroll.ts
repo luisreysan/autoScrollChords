@@ -26,6 +26,7 @@ export function useAutoScroll({
   const lastTsRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const pxPerMsRef = useRef(0);
+  const virtualScrollTopRef = useRef(0);
 
   const stopRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -57,11 +58,14 @@ export function useAutoScroll({
     }
 
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    virtualScrollTopRef.current = el.scrollTop;
 
     if (mode === "duration" && durationSeconds && durationSeconds > 0) {
       pxPerMsRef.current = maxScroll / (durationSeconds * 1000);
     } else {
-      pxPerMsRef.current = manualSpeed * 0.05;
+      // Manual mode needs visibly faster movement on mobile screens.
+      // Slider 1..10 -> 0.12..1.20 px/ms
+      pxPerMsRef.current = Math.max(0.12, manualSpeed * 0.12);
     }
 
     lastTsRef.current = performance.now();
@@ -82,7 +86,11 @@ export function useAutoScroll({
       lastTsRef.current = now;
 
       const max = Math.max(0, elInner.scrollHeight - elInner.clientHeight);
-      elInner.scrollTop += pxPerMsRef.current * dt;
+      virtualScrollTopRef.current = Math.min(
+        max,
+        Math.max(0, virtualScrollTopRef.current + pxPerMsRef.current * dt),
+      );
+      elInner.scrollTop = virtualScrollTopRef.current;
 
       const progress = max > 0 ? Math.min(1, elInner.scrollTop / max) : 1;
       onProgress(progress);
