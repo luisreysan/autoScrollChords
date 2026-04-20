@@ -28,6 +28,7 @@ const FONT_STEPS = ["text-sm", "text-base", "text-lg"] as const;
 
 export function SongPageClient({ song, content }: SongPageClientProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollContentRef = useRef<HTMLDivElement>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   const [fontStep, setFontStep] = useState(1);
 
@@ -61,19 +62,52 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     }
 
     const evaluateScrollable = () => {
+      // Use a small tolerance because Android viewport/toolbars can produce +/-1px noise.
       const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-      setHasScrollableContent(maxScroll > 0);
+      setHasScrollableContent(maxScroll > 1);
     };
 
     evaluateScrollable();
 
     const observer = new ResizeObserver(evaluateScrollable);
     observer.observe(el);
+    const contentEl = scrollContentRef.current;
+    if (contentEl) {
+      observer.observe(contentEl);
+    }
+
+    const mutationObserver = new MutationObserver(evaluateScrollable);
+    if (contentEl) {
+      mutationObserver.observe(contentEl, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
+
+    // Chrome Android can change effective viewport as URL bars expand/collapse.
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", evaluateScrollable);
+    window.addEventListener("orientationchange", evaluateScrollable);
     window.addEventListener("resize", evaluateScrollable);
+
+    // Re-check after fonts and initial paints settle.
+    const rafA = window.requestAnimationFrame(evaluateScrollable);
+    const rafB = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(evaluateScrollable);
+    });
+    void document.fonts?.ready.then(() => {
+      evaluateScrollable();
+    });
 
     return () => {
       observer.disconnect();
+      mutationObserver.disconnect();
+      viewport?.removeEventListener("resize", evaluateScrollable);
+      window.removeEventListener("orientationchange", evaluateScrollable);
       window.removeEventListener("resize", evaluateScrollable);
+      window.cancelAnimationFrame(rafA);
+      window.cancelAnimationFrame(rafB);
     };
   }, [fontStep, sections.length]);
 
@@ -214,7 +248,9 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
         ref={scrollRef}
         className="mx-auto w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
       >
-        <ChordViewer sections={sections} fontSizeClass={fontClass} />
+        <div ref={scrollContentRef}>
+          <ChordViewer sections={sections} fontSizeClass={fontClass} />
+        </div>
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
