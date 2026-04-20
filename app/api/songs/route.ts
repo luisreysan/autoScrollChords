@@ -44,7 +44,6 @@ type ManualBody = {
   title?: unknown;
   artist?: unknown;
   rawText?: unknown;
-  duration_seconds?: unknown;
   source_url?: unknown;
 };
 
@@ -72,11 +71,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not parse tab content" }, { status: 422 });
   }
 
-  const durationSeconds =
-    typeof body.duration_seconds === "number" && Number.isFinite(body.duration_seconds)
-      ? Math.round(body.duration_seconds)
-      : null;
-
   const sourceUrl =
     typeof body.source_url === "string" && body.source_url.trim()
       ? body.source_url.trim()
@@ -100,9 +94,9 @@ export async function POST(request: Request) {
       tuning: null,
       capo: null,
       difficulty: null,
-      durationSeconds,
+      durationSeconds: null,
       scrollSpeed: null,
-      scrollMode: null,
+      scrollMode: "manual",
     });
     await tx.insert(songContents).values({
       id: contentId,

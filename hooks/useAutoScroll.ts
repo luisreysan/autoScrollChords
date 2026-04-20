@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-import type { ScrollMode } from "@/lib/types";
-
 type UseAutoScrollOptions = {
   scrollRef: React.RefObject<HTMLElement | null>;
   isPlaying: boolean;
   onPlayingChange: (playing: boolean) => void;
-  mode: ScrollMode;
-  durationSeconds: number | null;
   manualSpeed: number;
   onProgress: (progress: number) => void;
 };
@@ -18,8 +14,6 @@ export function useAutoScroll({
   scrollRef,
   isPlaying,
   onPlayingChange,
-  mode,
-  durationSeconds,
   manualSpeed,
   onProgress,
 }: UseAutoScrollOptions) {
@@ -74,15 +68,11 @@ export function useAutoScroll({
 
     virtualScrollTopRef.current = el.scrollTop;
 
-    if (mode === "duration" && durationSeconds && durationSeconds > 0) {
-      pxPerMsRef.current = maxScroll / (durationSeconds * 1000);
-    } else {
-      // New manual scale:
-      // 1.0 ~= previous 0.1 speed, with 10 levels below (0.1..0.9).
-      // Range 0.1..30.0 maps to 0.005..1.5 px/ms.
-      const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
-      pxPerMsRef.current = clampedSpeed * 0.05;
-    }
+    // New manual scale:
+    // 1.0 ~= previous 0.1 speed, with 10 levels below (0.1..0.9).
+    // Range 0.1..30.0 maps to 0.005..1.5 px/ms.
+    const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
+    pxPerMsRef.current = clampedSpeed * 0.05;
 
     debugUntilRef.current =
       process.env.NODE_ENV === "development" ? performance.now() + 2000 : 0;
@@ -92,9 +82,6 @@ export function useAutoScroll({
     if (debugUntilRef.current > 0) {
       console.debug("[useAutoScroll] play-start", {
         isPlaying,
-        mode,
-        durationSeconds,
-        manualSpeed,
         maxScroll,
         pxPerMs: pxPerMsRef.current,
         scrollTop: virtualScrollTopRef.current,
@@ -124,10 +111,8 @@ export function useAutoScroll({
         return;
       }
 
-      if (mode === "manual") {
-        const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
-        pxPerMsRef.current = clampedSpeed * 0.05;
-      }
+      const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
+      pxPerMsRef.current = clampedSpeed * 0.05;
 
       virtualScrollTopRef.current = Math.min(
         max,
@@ -166,8 +151,6 @@ export function useAutoScroll({
     };
   }, [
     isPlaying,
-    mode,
-    durationSeconds,
     onPlayingChange,
     onProgress,
     scrollRef,

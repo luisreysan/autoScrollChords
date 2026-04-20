@@ -20,7 +20,6 @@ export default function AddSongPage() {
   const [manualTitle, setManualTitle] = useState("");
   const [manualArtist, setManualArtist] = useState("");
   const [manualText, setManualText] = useState("");
-  const [manualDuration, setManualDuration] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
 
   const importFromUg = async () => {
@@ -58,8 +57,6 @@ export default function AddSongPage() {
   const submitManual = async () => {
     setManualLoading(true);
     try {
-      const duration =
-        manualDuration.trim() === "" ? undefined : Number.parseInt(manualDuration, 10);
       const res = await fetch("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,8 +64,6 @@ export default function AddSongPage() {
           title: manualTitle.trim(),
           artist: manualArtist.trim(),
           rawText: manualText,
-          duration_seconds:
-            duration !== undefined && Number.isFinite(duration) && duration > 0 ? duration : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -163,17 +158,6 @@ export default function AddSongPage() {
               onChange={(e) => setManualText(e.target.value)}
               rows={8}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="m-dur">Duration (seconds, optional)</Label>
-            <Input
-              id="m-dur"
-              inputMode="numeric"
-              value={manualDuration}
-              onChange={(e) => setManualDuration(e.target.value)}
-              placeholder="180"
-              className="min-h-[44px]"
             />
           </div>
           <Button

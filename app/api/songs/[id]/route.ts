@@ -8,7 +8,6 @@ import type { ScrollMode } from "@/lib/types";
 export const runtime = "nodejs";
 
 type PatchBody = {
-  duration_seconds?: unknown;
   scroll_speed?: unknown;
   scroll_mode?: unknown;
 };
@@ -46,20 +45,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   const updates: Partial<{
-    durationSeconds: number | null;
     scrollSpeed: number | null;
     scrollMode: ScrollMode | null;
   }> = {};
-
-  if (body.duration_seconds !== undefined) {
-    if (body.duration_seconds === null) {
-      updates.durationSeconds = null;
-    } else if (typeof body.duration_seconds === "number" && Number.isFinite(body.duration_seconds)) {
-      updates.durationSeconds = Math.max(0, Math.round(body.duration_seconds));
-    } else {
-      return NextResponse.json({ error: "Invalid duration_seconds" }, { status: 400 });
-    }
-  }
 
   if (body.scroll_speed !== undefined) {
     if (body.scroll_speed === null) {
@@ -74,7 +62,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (body.scroll_mode !== undefined) {
     if (body.scroll_mode === null) {
       updates.scrollMode = null;
-    } else if (body.scroll_mode === "duration" || body.scroll_mode === "manual") {
+    } else if (body.scroll_mode === "manual") {
       updates.scrollMode = body.scroll_mode;
     } else {
       return NextResponse.json({ error: "Invalid scroll_mode" }, { status: 400 });

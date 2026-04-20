@@ -15,7 +15,6 @@ import {
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { normalizeTabTextForDisplay, parseParsedSectionsJson, sectionsToTabText } from "@/lib/parser";
-import type { ScrollMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type SongPageClientProps = {
@@ -34,10 +33,6 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   const [fontStep, setFontStep] = useState(1);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const initialMode: ScrollMode =
-    song.scrollMode ?? (song.durationSeconds && song.durationSeconds > 0 ? "duration" : "manual");
-  const [mode, setMode] = useState<ScrollMode>(initialMode);
-  const [durationSeconds, setDurationSeconds] = useState<number | null>(song.durationSeconds);
   const [manualSpeed, setManualSpeed] = useState(() => {
     const s = song.scrollSpeed;
     if (typeof s === "number" && Number.isFinite(s)) {
@@ -129,18 +124,12 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     scrollRef,
     isPlaying,
     onPlayingChange: setIsPlaying,
-    mode,
-    durationSeconds,
     manualSpeed,
     onProgress: () => {},
   });
 
   const patchSong = useCallback(
-    async (payload: {
-      duration_seconds?: number | null;
-      scroll_speed?: number | null;
-      scroll_mode?: ScrollMode | null;
-    }) => {
+    async (payload: { scroll_speed?: number | null; scroll_mode?: "manual" | null }) => {
       try {
         const res = await fetch(`/api/songs/${song.id}`, {
           method: "PATCH",
@@ -166,13 +155,12 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     }
     const handle = window.setTimeout(() => {
       void patchSong({
-        duration_seconds: durationSeconds,
         scroll_speed: manualSpeed,
-        scroll_mode: mode,
+        scroll_mode: "manual",
       });
     }, 650);
     return () => window.clearTimeout(handle);
-  }, [durationSeconds, manualSpeed, mode, patchSong]);
+  }, [manualSpeed, patchSong]);
 
   const cycleFont = () => {
     setFontStep((s) => (s + 1) % FONT_STEPS.length);
@@ -198,10 +186,6 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
       return;
     }
 
-    if (mode === "duration" && (!durationSeconds || durationSeconds <= 0)) {
-      toast.message("Set a duration in seconds or switch to manual mode.");
-      return;
-    }
     setIsPlaying((p) => !p);
   };
 
@@ -283,10 +267,6 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
             onPlayPause={togglePlay}
             canPlay={hasScrollableContent}
             playHint={hasScrollableContent ? null : "No scroll area available for this song yet."}
-            mode={mode}
-            onModeChange={setMode}
-            durationSeconds={durationSeconds}
-            onDurationSecondsChange={setDurationSeconds}
             manualSpeed={manualSpeed}
             onManualSpeedChange={(value) => setManualSpeed(clampManualSpeed(value))}
           />

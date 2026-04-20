@@ -14,7 +14,7 @@ export type ParsedSection =
       chordLineRaw?: string;
     };
 
-export type ScrollMode = "duration" | "manual";
+export type ScrollMode = "manual";
 
 export type ExtensionImportPayload = {
   sourceUrl: string;

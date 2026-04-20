@@ -13,7 +13,7 @@ export const songs = sqliteTable(
     difficulty: text("difficulty"),
     durationSeconds: integer("duration_seconds"),
     scrollSpeed: real("scroll_speed"),
-    scrollMode: text("scroll_mode").$type<"duration" | "manual">(),
+    scrollMode: text("scroll_mode").$type<"manual">(),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),

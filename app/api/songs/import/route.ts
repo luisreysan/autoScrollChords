@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       difficulty: scraped.difficulty ?? null,
       durationSeconds: null,
       scrollSpeed: null,
-      scrollMode: null,
+      scrollMode: "manual",
     });
     await tx.insert(songContents).values({
       id: contentId,

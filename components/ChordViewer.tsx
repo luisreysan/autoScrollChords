@@ -26,10 +26,10 @@ function isChordOnlyLine(line: string): boolean {
   return parts.length > 0 && parts.every((p) => CHORD_TOKEN.test(p));
 }
 
-type ChordRenderSlot = {
-  chord: string;
-  originalCharIndex: number;
-  renderCharIndex: number;
+type ChordLyricSegment = {
+  id: string;
+  chord: string | null;
+  text: string;
 };
 
 function ChordToken({ chord }: { chord: string }) {
@@ -40,47 +40,61 @@ function ChordToken({ chord }: { chord: string }) {
   );
 }
 
-function buildChordRenderSlots(section: Extract<ParsedSection, { type: "line" }>): ChordRenderSlot[] {
+function buildChordLyricSegments(
+  section: Extract<ParsedSection, { type: "line" }>,
+): ChordLyricSegment[] {
   const positions = section.chordPositions ?? [];
-  if (positions.length === 0) {
-    return [];
+  if (positions.length === 0 || section.lyrics.length === 0) {
+    return [{ id: "plain-0", chord: null, text: section.lyrics }];
   }
 
-  const sorted = [...positions].sort((a, b) => a.charIndex - b.charIndex);
-  const lineLength = section.lineLength ?? section.lyrics.length;
-  const spread = sorted.length > 1 ? sorted[sorted.length - 1]!.charIndex - sorted[0]!.charIndex : 0;
-  const looksClusteredNearStart =
-    sorted.length >= 2 &&
-    lineLength >= 24 &&
-    spread <= Math.max(2, sorted.length * 2) &&
-    sorted[0]!.charIndex <= 1;
+  const sorted = [...positions]
+    .filter((cp) => typeof cp.chord === "string" && cp.chord.trim().length > 0)
+    .map((cp) => ({
+      chord: cp.chord.trim(),
+      charIndex: Math.max(0, Math.min(section.lyrics.length, Math.floor(cp.charIndex))),
+    }))
+    .sort((a, b) => a.charIndex - b.charIndex);
 
-  const wordStartColumns = Array.from(section.lyrics.matchAll(/\S+/g)).map((m) => m.index ?? 0);
-  let basePositions = sorted;
-  if (looksClusteredNearStart && wordStartColumns.length > 0) {
-    const maxIdx = Math.max(1, sorted.length - 1);
-    const maxWordIdx = Math.max(0, wordStartColumns.length - 1);
-    basePositions = sorted.map((cp, idx) => {
-      const wordIdx = Math.round((idx / maxIdx) * maxWordIdx);
-      return {
-        chord: cp.chord,
-        charIndex: wordStartColumns[wordIdx] ?? cp.charIndex,
-      };
+  if (sorted.length === 0) {
+    return [{ id: "plain-0", chord: null, text: section.lyrics }];
+  }
+
+  const segments: ChordLyricSegment[] = [];
+  let cursor = 0;
+  for (let i = 0; i < sorted.length; i += 1) {
+    const current = sorted[i]!;
+    const next = sorted[i + 1];
+    const start = current.charIndex;
+    const end = next ? next.charIndex : section.lyrics.length;
+
+    if (start > cursor) {
+      segments.push({
+        id: `plain-${i}`,
+        chord: null,
+        text: section.lyrics.slice(cursor, start),
+      });
+    }
+
+    const chunk = section.lyrics.slice(start, end);
+    segments.push({
+      id: `chord-${i}`,
+      chord: current.chord,
+      text: chunk.length > 0 ? chunk : " ",
+    });
+
+    cursor = end;
+  }
+
+  if (cursor < section.lyrics.length) {
+    segments.push({
+      id: "plain-tail",
+      chord: null,
+      text: section.lyrics.slice(cursor),
     });
   }
 
-  const slots: ChordRenderSlot[] = [];
-  for (const cp of basePositions) {
-    const prev = slots[slots.length - 1];
-    const minStart = prev ? prev.renderCharIndex + prev.chord.length + 1 : 0;
-    const renderCharIndex = Math.max(cp.charIndex, minStart);
-    slots.push({
-      chord: cp.chord,
-      originalCharIndex: cp.charIndex,
-      renderCharIndex,
-    });
-  }
-  return slots;
+  return segments.length > 0 ? segments : [{ id: "plain-fallback", chord: null, text: section.lyrics }];
 }
 
 export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", className }: ChordViewerProps) {
@@ -89,12 +103,12 @@ export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", cl
     return (
       <div
         className={cn(
-          "max-w-full overflow-x-auto font-mono leading-[1.8] text-foreground",
+          "max-w-full overflow-x-hidden font-mono leading-[1.8] text-foreground",
           fontSizeClass,
           className,
         )}
       >
-        <pre className="min-w-full whitespace-pre bg-transparent p-0">
+        <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent p-0">
           {lines.map((line, idx) => (
             <span key={`pre-line-${idx}`} className={isChordOnlyLine(line) ? "font-bold" : undefined}>
               {line}
@@ -129,35 +143,24 @@ export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", cl
         return (
           <div key={`l-${idx}`} className="mb-4">
             {section.chordPositions && section.chordPositions.length > 0 ? (
-              <div className="mb-1 min-h-6 overflow-x-auto">
-                {(() => {
-                  const slots = buildChordRenderSlots(section);
-                  const lineLength = section.lineLength ?? section.lyrics.length;
-                  const requiredFromSlots = slots.reduce(
-                    (max, slot) => Math.max(max, slot.renderCharIndex + slot.chord.length),
-                    0,
-                  );
-                  const gridWidth = Math.max(24, lineLength + 2, requiredFromSlots + 1);
-
-                  return (
-                    <div className="relative h-6 min-w-full" style={{ width: `${gridWidth}ch` }}>
-                      {slots.map((slot, i) => (
-                        <span
-                          key={`${idx}-cp-${i}`}
-                          className="absolute top-0"
-                          title={
-                            slot.renderCharIndex !== slot.originalCharIndex
-                              ? `Adjusted from column ${slot.originalCharIndex}`
-                              : undefined
-                          }
-                          style={{ left: `${slot.renderCharIndex}ch` }}
-                        >
-                          <ChordToken chord={slot.chord} />
-                        </span>
-                      ))}
-                    </div>
-                  );
-                })()}
+              <div className="mb-1 flex flex-wrap items-start gap-x-0 gap-y-1">
+                {buildChordLyricSegments(section).map((segment) =>
+                  segment.chord ? (
+                    <span key={`${idx}-${segment.id}`} className="inline-flex max-w-full flex-col align-top">
+                      <span className="mb-0.5 leading-none">
+                        <ChordToken chord={segment.chord} />
+                      </span>
+                      <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</span>
+                    </span>
+                  ) : (
+                    <span
+                      key={`${idx}-${segment.id}`}
+                      className="whitespace-pre-wrap [overflow-wrap:anywhere]"
+                    >
+                      {segment.text}
+                    </span>
+                  ),
+                )}
               </div>
             ) : section.chords.length > 0 ? (
               <div className="mb-1 flex flex-wrap gap-x-2 gap-y-1">
