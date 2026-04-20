@@ -4,7 +4,7 @@ Mobile-first web app to view guitar chord sheets with auto-scroll, Ultimate Guit
 
 ## Setup
 
-1. Copy `.env.template` to `.env.local` and fill in Turso and Redis credentials.
+1. Copy `.env.template` to `.env.local` and fill in Turso + Redis credentials.
 2. Apply the database schema to your Turso database:
 
 ```bash
@@ -13,7 +13,7 @@ npm run db:push
 
 Alternatively, use generated SQL under `drizzle/` with your preferred migration workflow.
 
-1. Install dependencies and run the dev server:
+3. Install dependencies and run the dev server:
 
 ```bash
 npm install
@@ -38,14 +38,22 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Set the same environment variables in the Vercel project. API routes that scrape Ultimate Guitar use the **Node.js** runtime (`export const runtime = "nodejs"`).
 
+Required env vars in production:
+
+- `TURSO_DATABASE_URL`
+- `TURSO_AUTH_TOKEN`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `EXTENSION_IMPORT_TOKEN` (required if you use the Chrome extension importer)
+
 ### If you see `404: NOT_FOUND` (plain Vercel page)
 
 Work through this in order:
 
 1. **Diagnostics URL (no database required)**
-  Open `**https://YOUR_PROJECT.vercel.app/api/health`** (use your real deployment domain).  
-  - **If this is also 404**: the deployment is not running Next.js correctly. Fix project settings (below) and redeploy — the app code is not being served.  
-  - **If you get JSON** with `"ok": true`: routing works; continue with env vars / Turso if `/` shows an error banner.
+   Open `https://YOUR_PROJECT.vercel.app/api/health` (use your real deployment domain).  
+   - **If this is also 404**: the deployment is not running Next.js correctly. Fix project settings (below) and redeploy — the app code is not being served.  
+   - **If you get JSON** with `"ok": true`: routing works; continue with env vars / Turso if `/` shows an error banner.
 2. **Project → Settings → General → Framework Preset** must be **Next.js**, not “Other” or a static preset.
 3. **Project → Settings → Build & Development → Output Directory** must be **empty** for Next.js. Do not set it to `.next` or `out` unless you really know you need it; wrong values often produce a global 404.
 4. **Root Directory** should be **empty** (repo root) unless the app lives in a subfolder.
@@ -55,9 +63,40 @@ Work through this in order:
 
 ### If `/` loads but you see a “Database not available” banner
 
-Add `**TURSO_DATABASE_URL`** and `**TURSO_AUTH_TOKEN**` (if your Turso database requires it) under **Environment Variables** for **Production**, then **redeploy**. From your machine, run `**npm run db:push`** with the same URL/token so the `songs` / `song_contents` tables exist.
+Add `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` (if your Turso database requires it) under **Environment Variables** for **Production**, then **redeploy**. From your machine, run `npm run db:push` with the same URL/token so the `songs` / `song_contents` tables exist.
 
-The `**GET /api/health**` response includes safe booleans (`hasTursoUrl`, etc.) so you can confirm variables are visible to the deployment without pasting secrets.
+The `GET /api/health` response includes safe booleans (`hasTursoUrl`, `hasExtensionImportToken`, etc.) so you can confirm variables are visible to the deployment without pasting secrets.
+
+## Chrome Extension Import (V1)
+
+This repository includes a Chrome MV3 extension under `extension/` that exports the currently open Ultimate Guitar song to your app.
+
+### Backend requirements
+
+1. Set `EXTENSION_IMPORT_TOKEN` in your app env vars.
+2. Use endpoint: `POST /api/songs/import-extension`
+3. Send header: `x-extension-token: <EXTENSION_IMPORT_TOKEN>`
+
+### Load extension locally
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the `extension/` folder from this repo.
+
+### Configure extension
+
+Open the extension options page and set:
+
+- `API Base URL` (example: `https://your-app.vercel.app`)
+- `Extension Import Token` (must match backend env var)
+
+### Use extension
+
+1. Open any Ultimate Guitar tab page (`/tab/...` URL).
+2. Click the extension icon.
+3. Click **Export current song**.
+4. The popup reports whether the song was imported or already exists.
 
 ## Tech stack
 

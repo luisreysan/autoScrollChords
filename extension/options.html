@@ -1,0 +1,37 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoScrollChords Exporter Settings</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; max-width: 680px; }
+      h1 { margin-bottom: 8px; }
+      p { color: #4b5563; }
+      label { display: block; margin: 16px 0 6px; font-weight: 600; }
+      input { width: 100%; min-height: 40px; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; }
+      button { margin-top: 16px; min-height: 42px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font-weight: 600; padding: 0 14px; cursor: pointer; }
+      #status { margin-top: 10px; font-size: 13px; }
+      code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <h1>AutoScrollChords Exporter - Settings</h1>
+    <p>Set your app URL and extension token before exporting songs.</p>
+
+    <label for="apiBaseUrl">API Base URL</label>
+    <input id="apiBaseUrl" type="url" placeholder="https://your-app.vercel.app" />
+
+    <label for="extensionToken">Extension Import Token</label>
+    <input id="extensionToken" type="password" placeholder="EXTENSION_IMPORT_TOKEN" />
+
+    <button id="saveBtn">Save settings</button>
+    <div id="status"></div>
+
+    <p style="margin-top: 20px;">
+      Backend endpoint used: <code>/api/songs/import-extension</code>
+    </p>
+
+    <script src="options.js"></script>
+  </body>
+</html>

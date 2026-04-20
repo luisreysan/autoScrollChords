@@ -16,5 +16,6 @@ export async function GET() {
     hasTursoToken: Boolean(process.env.TURSO_AUTH_TOKEN),
     hasKvUrl,
     hasKvToken,
+    hasExtensionImportToken: Boolean(process.env.EXTENSION_IMPORT_TOKEN),
   });
 }

@@ -11,3 +11,23 @@ export type ScrollSessionPayload = {
   mode: ScrollMode;
   updatedAt: number;
 };
+
+export type ExtensionImportPayload = {
+  sourceUrl: string;
+  title: string;
+  artist: string;
+  rawText: string;
+  tuning?: string | null;
+  capo?: number | null;
+  difficulty?: string | null;
+};
+
+export type ExtensionImportResponse =
+  | {
+      isNew: boolean;
+      song: unknown;
+      content: unknown;
+    }
+  | {
+      error: string;
+    };

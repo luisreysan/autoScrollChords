@@ -1,0 +1,29 @@
+﻿{
+  "manifest_version": 3,
+  "name": "AutoScrollChords Exporter",
+  "description": "Export the current Ultimate Guitar song to AutoScrollChords.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Export song",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://*.ultimate-guitar.com/*",
+    "https://*.vercel.app/*",
+    "https://*/*",
+    "http://localhost/*",
+    "http://localhost:3000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.ultimate-guitar.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
