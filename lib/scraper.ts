@@ -5,6 +5,8 @@ const UG_HEADERS = {
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
   "Accept-Language": "en-US,en;q=0.9",
   Accept: "text/html,application/xhtml+xml",
+  Referer: "https://www.google.com/",
+  DNT: "1",
 } as const;
 
 export type ScrapedSongMeta = {
@@ -19,7 +21,24 @@ export type ScrapeResult = ScrapedSongMeta & {
   rawText: string;
 };
 
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 20_000;
+
+class ScrapeError extends Error {
+  constructor(
+    message: string,
+    public readonly kind:
+      | "timeout"
+      | "http"
+      | "network"
+      | "blocked"
+      | "empty_content"
+      | "unknown",
+    public readonly statusCode?: number,
+  ) {
+    super(message);
+    this.name = "ScrapeError";
+  }
+}
 
 function devLogHtmlSnippet(html: string, label: string) {
   if (process.env.NODE_ENV !== "production") {
@@ -268,27 +287,82 @@ function extractFromPreFallback(html: string): string | null {
 }
 
 export async function scrapeUltimateGuitarTab(url: string): Promise<ScrapeResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const attempts = [
+    {
+      timeout: FETCH_TIMEOUT_MS,
+      headers: UG_HEADERS,
+    },
+    {
+      timeout: 30_000,
+      headers: {
+        ...UG_HEADERS,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      },
+    },
+  ] as const;
 
-  let res: Response;
-  try {
-    res = await fetch(url, { headers: UG_HEADERS as HeadersInit, signal: controller.signal });
-  } catch (e) {
-    const err = e as Error;
-    if (err.name === "AbortError") {
-      throw new Error("Request timed out");
+  let html: string | null = null;
+  let lastError: Error | null = null;
+
+  for (const attempt of attempts) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), attempt.timeout);
+    try {
+      const res = await fetch(url, {
+        headers: attempt.headers as HeadersInit,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 429) {
+          throw new ScrapeError(
+            "Ultimate Guitar blocked this request (403/429). Try again later or use manual import.",
+            "blocked",
+            res.status,
+          );
+        }
+        throw new ScrapeError(`HTTP ${res.status}`, "http", res.status);
+      }
+
+      const body = await res.text();
+      const lower = body.toLowerCase();
+      const looksBlocked =
+        lower.includes("just a moment") ||
+        lower.includes("cf-browser-verification") ||
+        lower.includes("challenge-platform") ||
+        lower.includes("captcha");
+
+      if (looksBlocked) {
+        throw new ScrapeError(
+          "Ultimate Guitar returned an anti-bot challenge. Try manual import for this song.",
+          "blocked",
+        );
+      }
+
+      html = body;
+      break;
+    } catch (e) {
+      const err = e as Error;
+      lastError = err;
+      if (err.name === "AbortError") {
+        lastError = new ScrapeError("Request timed out", "timeout");
+      }
+      if (lastError instanceof ScrapeError && lastError.kind === "blocked") {
+        throw lastError;
+      }
+    } finally {
+      clearTimeout(timer);
     }
-    throw new Error(err.message || "Fetch failed");
-  } finally {
-    clearTimeout(timer);
   }
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+  if (!html) {
+    if (lastError instanceof ScrapeError) {
+      throw lastError;
+    }
+    throw new ScrapeError(lastError?.message || "Fetch failed", "network");
   }
 
-  const html = await res.text();
   devLogHtmlSnippet(html, "fetch");
 
   let rawText: string | null = null;
@@ -318,7 +392,7 @@ export async function scrapeUltimateGuitarTab(url: string): Promise<ScrapeResult
   }
 
   if (!rawText || !rawText.trim()) {
-    throw new Error("Empty tab content");
+    throw new ScrapeError("Could not extract tab content from the page", "empty_content");
   }
 
   const ogTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)?.[1];

@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     scraped = await scrapeUltimateGuitarTab(url);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to fetch tab";
+    console.error("[songs/import] scrape failed", { url, error: msg });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
