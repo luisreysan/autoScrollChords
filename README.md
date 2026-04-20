@@ -1,10 +1,10 @@
 # AutoScroll Chords
 
-Mobile-first web app to view guitar chord sheets with auto-scroll, Ultimate Guitar import, Turso (SQLite) storage, and optional multi-device scroll sync via Upstash Redis (REST).
+Mobile-first web app to view guitar chord sheets with local auto-scroll, Ultimate Guitar import, and Turso (SQLite) storage.
 
 ## Setup
 
-1. Copy `.env.template` to `.env.local` and fill in Turso + Redis credentials.
+1. Copy `.env.template` to `.env.local` and fill in Turso credentials.
 2. Apply the database schema to your Turso database:
 
 ```bash
@@ -42,8 +42,6 @@ Required env vars in production:
 
 - `TURSO_DATABASE_URL`
 - `TURSO_AUTH_TOKEN`
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
 - `EXTENSION_IMPORT_TOKEN` (required if you use the Chrome extension importer)
 
 ### If you see `404: NOT_FOUND` (plain Vercel page)
@@ -100,8 +98,7 @@ Open the extension options page and set:
 
 ## Tech stack
 
-- Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui  
-- Drizzle ORM + Turso (`@libsql/client`)  
-- Cheerio for server-side parsing  
-- `@upstash/redis` for scroll session storage (REST)
+- Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui
+- Drizzle ORM + Turso (`@libsql/client`)
+- Cheerio for server-side parsing
 

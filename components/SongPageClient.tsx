@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { ChordViewer } from "@/components/ChordViewer";
 import { ScrollControls } from "@/components/ScrollControls";
-import { SyncButton } from "@/components/SyncButton";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Collapsible,
@@ -16,7 +15,6 @@ import {
 } from "@/components/ui/collapsible";
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
-import { useScrollSync } from "@/hooks/useScrollSync";
 import { parseParsedSectionsJson } from "@/lib/parser";
 import type { ScrollMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -46,8 +44,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     return 5;
   });
 
-  const [syncEnabled, setSyncEnabled] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [hasScrollableContent, setHasScrollableContent] = useState(true);
 
   const sections = useMemo(
     () => parseParsedSectionsJson(content.parsedSections),
@@ -56,7 +53,29 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
   const fontClass = FONT_STEPS[fontStep] ?? FONT_STEPS[1];
 
-  const isLeader = syncEnabled && isPlaying;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      setHasScrollableContent(true);
+      return;
+    }
+
+    const evaluateScrollable = () => {
+      const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+      setHasScrollableContent(maxScroll > 0);
+    };
+
+    evaluateScrollable();
+
+    const observer = new ResizeObserver(evaluateScrollable);
+    observer.observe(el);
+    window.addEventListener("resize", evaluateScrollable);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", evaluateScrollable);
+    };
+  }, [fontStep, sections.length]);
 
   useAutoScroll({
     scrollRef,
@@ -65,20 +84,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     mode,
     durationSeconds,
     manualSpeed,
-    onProgress: setProgress,
-  });
-
-  const syncSpeed = mode === "manual" ? manualSpeed : durationSeconds ?? 0;
-
-  useScrollSync({
-    songId: song.id,
-    enabled: syncEnabled,
-    isLeader,
-    isPlaying,
-    progress,
-    speed: syncSpeed,
-    mode,
-    scrollRef,
+    onProgress: () => {},
   });
 
   const patchSong = useCallback(
@@ -120,20 +126,23 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     return () => window.clearTimeout(handle);
   }, [durationSeconds, manualSpeed, mode, patchSong]);
 
-  const onScroll = () => {
-    const el = scrollRef.current;
-    if (!el) {
-      return;
-    }
-    const max = Math.max(0, el.scrollHeight - el.clientHeight);
-    setProgress(max > 0 ? el.scrollTop / max : 0);
-  };
-
   const cycleFont = () => {
     setFontStep((s) => (s + 1) % FONT_STEPS.length);
   };
 
   const togglePlay = () => {
+    const el = scrollRef.current;
+    if (!el) {
+      toast.message("Scroll container is not ready yet.");
+      return;
+    }
+
+    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    if (maxScroll <= 0) {
+      toast.message("This song has no scrollable content at the current font size.");
+      return;
+    }
+
     if (mode === "duration" && (!durationSeconds || durationSeconds <= 0)) {
       toast.message("Set a duration in seconds or switch to manual mode.");
       return;
@@ -203,7 +212,6 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
       <main
         ref={scrollRef}
-        onScroll={onScroll}
         className="mx-auto w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
       >
         <ChordViewer sections={sections} fontSizeClass={fontClass} />
@@ -211,10 +219,11 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
         <div className="mx-auto max-w-lg space-y-2 px-3 pt-2">
-          <SyncButton enabled={syncEnabled} onToggle={() => setSyncEnabled((s) => !s)} />
           <ScrollControls
             isPlaying={isPlaying}
             onPlayPause={togglePlay}
+            canPlay={hasScrollableContent}
+            playHint={hasScrollableContent ? null : "No scroll area available for this song yet."}
             mode={mode}
             onModeChange={setMode}
             durationSeconds={durationSeconds}

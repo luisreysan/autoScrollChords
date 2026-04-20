@@ -4,14 +4,6 @@ export type ParsedSection =
 
 export type ScrollMode = "duration" | "manual";
 
-export type ScrollSessionPayload = {
-  isPlaying: boolean;
-  progress: number;
-  speed: number;
-  mode: ScrollMode;
-  updatedAt: number;
-};
-
 export type ExtensionImportPayload = {
   sourceUrl: string;
   title: string;

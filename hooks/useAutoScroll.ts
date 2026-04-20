@@ -27,6 +27,8 @@ export function useAutoScroll({
   const rafRef = useRef<number | null>(null);
   const pxPerMsRef = useRef(0);
   const virtualScrollTopRef = useRef(0);
+  const loopRunningRef = useRef(false);
+  const debugUntilRef = useRef(0);
 
   const stopRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -34,6 +36,7 @@ export function useAutoScroll({
       rafRef.current = null;
     }
     lastTsRef.current = null;
+    loopRunningRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -58,6 +61,12 @@ export function useAutoScroll({
     }
 
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    if (maxScroll <= 0) {
+      onProgress(1);
+      onPlayingChange(false);
+      return;
+    }
+
     virtualScrollTopRef.current = el.scrollTop;
 
     if (mode === "duration" && durationSeconds && durationSeconds > 0) {
@@ -65,14 +74,30 @@ export function useAutoScroll({
     } else {
       // Manual mode needs visibly faster movement on mobile screens.
       // Slider 1..10 -> 0.12..1.20 px/ms
-      pxPerMsRef.current = Math.max(0.12, manualSpeed * 0.12);
+      pxPerMsRef.current = Math.max(0.14, manualSpeed * 0.14);
     }
 
+    debugUntilRef.current =
+      process.env.NODE_ENV === "development" ? performance.now() + 2000 : 0;
     lastTsRef.current = performance.now();
+    loopRunningRef.current = true;
+
+    if (debugUntilRef.current > 0) {
+      console.debug("[useAutoScroll] play-start", {
+        isPlaying,
+        mode,
+        durationSeconds,
+        manualSpeed,
+        maxScroll,
+        pxPerMs: pxPerMsRef.current,
+        scrollTop: virtualScrollTopRef.current,
+      });
+    }
 
     const tick = (now: number) => {
       const elInner = scrollRef.current;
       if (!elInner) {
+        stopRaf();
         return;
       }
 
@@ -86,6 +111,12 @@ export function useAutoScroll({
       lastTsRef.current = now;
 
       const max = Math.max(0, elInner.scrollHeight - elInner.clientHeight);
+      if (max <= 0) {
+        onProgress(1);
+        onPlayingChange(false);
+        return;
+      }
+
       virtualScrollTopRef.current = Math.min(
         max,
         Math.max(0, virtualScrollTopRef.current + pxPerMsRef.current * dt),
@@ -95,6 +126,17 @@ export function useAutoScroll({
       const progress = max > 0 ? Math.min(1, elInner.scrollTop / max) : 1;
       onProgress(progress);
 
+      if (debugUntilRef.current > now) {
+        console.debug("[useAutoScroll] tick", {
+          dt,
+          maxScroll: max,
+          pxPerMs: pxPerMsRef.current,
+          scrollTop: elInner.scrollTop,
+          virtualTop: virtualScrollTopRef.current,
+          progress,
+        });
+      }
+
       if (elInner.scrollTop >= max - 0.75) {
         onPlayingChange(false);
         return;
@@ -103,7 +145,9 @@ export function useAutoScroll({
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    if (!loopRunningRef.current || rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(tick);
+    }
 
     return () => {
       stopRaf();

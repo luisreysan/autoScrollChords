@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 type ScrollControlsProps = {
   isPlaying: boolean;
   onPlayPause: () => void;
+  canPlay: boolean;
+  playHint?: string | null;
   mode: ScrollMode;
   onModeChange: (mode: ScrollMode) => void;
   durationSeconds: number | null;
@@ -23,6 +25,8 @@ type ScrollControlsProps = {
 export function ScrollControls({
   isPlaying,
   onPlayPause,
+  canPlay,
+  playHint,
   mode,
   onModeChange,
   durationSeconds,
@@ -41,6 +45,7 @@ export function ScrollControls({
             "bg-blue-600 text-white hover:bg-blue-600/90",
           )}
           onClick={onPlayPause}
+          disabled={!canPlay}
           aria-label={isPlaying ? "Pause scroll" : "Play scroll"}
         >
           {isPlaying ? <Pause className="size-8" /> : <Play className="size-8 pl-0.5" />}
@@ -112,6 +117,7 @@ export function ScrollControls({
           )}
         </div>
       </div>
+      {playHint ? <p className="text-center text-xs text-muted-foreground">{playHint}</p> : null}
     </div>
   );
 }
