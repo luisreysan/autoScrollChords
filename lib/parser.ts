@@ -9,6 +9,10 @@ function normalizeLineWhitespace(line: string): string {
   return line.replace(/\u00A0/g, " ").replace(/\t/g, " ".repeat(TAB_WIDTH));
 }
 
+function trimRight(line: string): string {
+  return line.replace(/\s+$/g, "");
+}
+
 function isChordLine(line: string): boolean {
   const normalized = normalizeLineWhitespace(line);
   const trimmed = line.trim();
@@ -114,6 +118,78 @@ export function parseTabText(raw: string): ParsedSection[] {
 
 export function parsedSectionsToJson(sections: ParsedSection[]): string {
   return JSON.stringify(sections);
+}
+
+export function normalizeTabTextForDisplay(raw: string): string {
+  return raw
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => trimRight(normalizeLineWhitespace(line)))
+    .join("\n")
+    .trim();
+}
+
+function buildChordLineFromPositions(section: Extract<ParsedSection, { type: "line" }>): string | null {
+  if (!section.chordPositions || section.chordPositions.length === 0) {
+    return null;
+  }
+  const ordered = [...section.chordPositions].sort((a, b) => a.charIndex - b.charIndex);
+  const inferredLength = ordered.reduce(
+    (max, cp) => Math.max(max, cp.charIndex + cp.chord.length),
+    section.lineLength ?? 0,
+  );
+  if (inferredLength <= 0) {
+    return null;
+  }
+  const chars = Array.from({ length: inferredLength }, () => " ");
+  for (const cp of ordered) {
+    const start = Math.max(0, Math.min(chars.length - 1, cp.charIndex));
+    for (let i = 0; i < cp.chord.length && start + i < chars.length; i += 1) {
+      chars[start + i] = cp.chord[i] ?? " ";
+    }
+  }
+  return trimRight(chars.join(""));
+}
+
+export function sectionsToTabText(sections: ParsedSection[]): string {
+  const lines: string[] = [];
+
+  for (const section of sections) {
+    if (section.type === "section_header") {
+      if (lines.length > 0 && lines[lines.length - 1] !== "") {
+        lines.push("");
+      }
+      lines.push(`[${section.label}]`);
+      lines.push("");
+      continue;
+    }
+
+    const chordLine =
+      (typeof section.chordLineRaw === "string" && section.chordLineRaw.trim().length > 0
+        ? trimRight(normalizeLineWhitespace(section.chordLineRaw))
+        : null) ??
+      buildChordLineFromPositions(section) ??
+      (section.chords.length > 0 ? section.chords.join(" ") : null);
+
+    if (chordLine && chordLine.trim().length > 0) {
+      lines.push(chordLine);
+    }
+
+    if (section.lyrics.length > 0) {
+      lines.push(normalizeLineWhitespace(section.lyrics));
+    }
+  }
+
+  const compacted: string[] = [];
+  for (const line of lines) {
+    const normalized = trimRight(line);
+    if (normalized === "" && compacted.length > 0 && compacted[compacted.length - 1] === "") {
+      continue;
+    }
+    compacted.push(normalized);
+  }
+
+  return compacted.join("\n").trim();
 }
 
 export function parseParsedSectionsJson(json: string): ParsedSection[] {

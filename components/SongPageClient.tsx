@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/collapsible";
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
-import { parseParsedSectionsJson } from "@/lib/parser";
+import { normalizeTabTextForDisplay, parseParsedSectionsJson, sectionsToTabText } from "@/lib/parser";
 import type { ScrollMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +57,13 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     () => parseParsedSectionsJson(content.parsedSections),
     [content.parsedSections],
   );
+  const tabText = useMemo(() => {
+    const raw = typeof content.rawText === "string" ? normalizeTabTextForDisplay(content.rawText) : "";
+    if (raw.length > 0) {
+      return raw;
+    }
+    return sectionsToTabText(sections);
+  }, [content.rawText, sections]);
 
   const fontClass = FONT_STEPS[fontStep] ?? FONT_STEPS[1];
 
@@ -264,7 +271,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
         className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
       >
         <div ref={scrollContentRef}>
-          <ChordViewer sections={sections} fontSizeClass={fontClass} />
+          <ChordViewer sections={sections} tabText={tabText} fontSizeClass={fontClass} />
         </div>
       </main>
 

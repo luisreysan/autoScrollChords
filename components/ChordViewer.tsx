@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 type ChordViewerProps = {
   sections: ParsedSection[];
+  tabText?: string;
   fontSizeClass?: string;
   className?: string;
 };
@@ -67,7 +68,21 @@ function buildChordRenderSlots(section: Extract<ParsedSection, { type: "line" }>
   return slots;
 }
 
-export function ChordViewer({ sections, fontSizeClass = "text-base", className }: ChordViewerProps) {
+export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", className }: ChordViewerProps) {
+  if (tabText && tabText.trim().length > 0) {
+    return (
+      <div
+        className={cn(
+          "max-w-full overflow-x-auto font-mono leading-[1.8] text-foreground",
+          fontSizeClass,
+          className,
+        )}
+      >
+        <pre className="min-w-full whitespace-pre bg-transparent p-0">{tabText}</pre>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
