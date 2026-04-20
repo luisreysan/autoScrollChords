@@ -96,6 +96,12 @@ Open the extension options page and set:
 3. Click **Export current song**.
 4. The popup reports whether the song was imported or already exists.
 
+### Chord-to-lyric alignment
+
+New songs imported through the Chrome extension now keep chord positions aligned to lyric words (Ultimate Guitar style).
+
+If a song was imported before this feature, reimport it from the extension to get exact alignment data. Older records continue to render with the legacy chord-line fallback.
+
 ## Tech stack
 
 - Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui

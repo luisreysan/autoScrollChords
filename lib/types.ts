@@ -1,6 +1,11 @@
+export type ChordPosition = {
+  chord: string;
+  charIndex: number;
+};
+
 export type ParsedSection =
   | { type: "section_header"; label: string }
-  | { type: "line"; chords: string[]; lyrics: string };
+  | { type: "line"; chords: string[]; lyrics: string; chordPositions?: ChordPosition[] };
 
 export type ScrollMode = "duration" | "manual";
 
@@ -9,6 +14,7 @@ export type ExtensionImportPayload = {
   title: string;
   artist: string;
   rawText: string;
+  positionedSections?: ParsedSection[];
   tuning?: string | null;
   capo?: number | null;
   difficulty?: string | null;

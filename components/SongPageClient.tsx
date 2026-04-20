@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Type } from "lucide-react";
+import { ChevronUp, Settings2, Type } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -11,7 +11,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
@@ -25,6 +24,8 @@ type SongPageClientProps = {
 };
 
 const FONT_STEPS = ["text-sm", "text-base", "text-lg"] as const;
+const MIN_MANUAL_SPEED = 0.1;
+const MAX_MANUAL_SPEED = 3.0;
 
 export function SongPageClient({ song, content }: SongPageClientProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -40,9 +41,14 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   const [manualSpeed, setManualSpeed] = useState(() => {
     const s = song.scrollSpeed;
     if (typeof s === "number" && Number.isFinite(s)) {
-      return Math.min(10, Math.max(1, Math.round(s)));
+      // Backward compatibility:
+      // old values were mostly 1..18 integers. Convert to decimal speed scale.
+      if (s > MAX_MANUAL_SPEED) {
+        return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s * 0.03)).toFixed(1));
+      }
+      return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s)).toFixed(1));
     }
-    return 5;
+    return 0.3;
   });
 
   const [hasScrollableContent, setHasScrollableContent] = useState(true);
@@ -164,6 +170,13 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     setFontStep((s) => (s + 1) % FONT_STEPS.length);
   };
 
+  const clampManualSpeed = useCallback((value: number) => {
+    if (!Number.isFinite(value)) {
+      return MIN_MANUAL_SPEED;
+    }
+    return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, value)).toFixed(1));
+  }, []);
+
   const togglePlay = () => {
     const el = scrollRef.current;
     if (!el) {
@@ -212,19 +225,21 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
           >
             <Type className="size-5" />
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            className="min-h-[48px] min-w-[48px] shrink-0"
+            onClick={() => setMetaOpen((open) => !open)}
+            aria-expanded={metaOpen}
+            aria-label={metaOpen ? "Hide capo and tuning" : "Show capo and tuning"}
+          >
+            {metaOpen ? <ChevronUp className="size-5" /> : <Settings2 className="size-5" />}
+          </Button>
         </div>
         <Collapsible open={metaOpen} onOpenChange={setMetaOpen}>
-          <div className="mx-auto flex max-w-lg flex-col px-3 pb-2">
-            <CollapsibleTrigger
-              className={cn(
-                buttonVariants({ variant: "ghost" }),
-                "flex h-11 min-h-[44px] w-full items-center justify-between px-2 text-sm text-muted-foreground",
-              )}
-            >
-              Capo &amp; tuning
-              {metaOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-1 px-2 pb-2 text-sm text-muted-foreground">
+          <div className="mx-auto max-w-lg px-3">
+            <CollapsibleContent className="space-y-1 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
               <p>
                 <span className="font-medium text-foreground">Capo: </span>
                 {song.capo != null ? song.capo : "—"}
@@ -265,7 +280,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
             durationSeconds={durationSeconds}
             onDurationSecondsChange={setDurationSeconds}
             manualSpeed={manualSpeed}
-            onManualSpeedChange={setManualSpeed}
+            onManualSpeedChange={(value) => setManualSpeed(clampManualSpeed(value))}
           />
         </div>
       </div>

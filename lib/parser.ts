@@ -1,4 +1,4 @@
-import type { ParsedSection } from "@/lib/types";
+import type { ChordPosition, ParsedSection } from "@/lib/types";
 
 /** Matches common guitar chord symbols (letters, #/b, sus/add/dim/aug variants, slash bass). */
 const CHORD_TOKEN =
@@ -18,6 +18,23 @@ function splitChordTokens(line: string): string[] {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+}
+
+function extractChordPositions(line: string): ChordPosition[] {
+  const out: ChordPosition[] = [];
+  const tokenRe = /\S+/g;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(line)) !== null) {
+    const token = match[0];
+    if (!CHORD_TOKEN.test(token)) {
+      continue;
+    }
+    out.push({
+      chord: token,
+      charIndex: match.index,
+    });
+  }
+  return out;
 }
 
 const SECTION_HEADER = /^\[([A-Z][^\]]*)\]$/;
@@ -47,14 +64,25 @@ export function parseTabText(raw: string): ParsedSection[] {
     }
 
     if (isChordLine(trimmed)) {
-      const chords = splitChordTokens(trimmed);
+      const chordPositions = extractChordPositions(line);
+      const chords = chordPositions.length > 0 ? chordPositions.map((c) => c.chord) : splitChordTokens(trimmed);
       const next = lines[i + 1];
       if (next !== undefined && !isChordLine(next.trim()) && !next.trim().match(SECTION_HEADER)) {
-        out.push({ type: "line", chords, lyrics: next });
+        out.push({
+          type: "line",
+          chords,
+          lyrics: next,
+          ...(chordPositions.length > 0 ? { chordPositions } : {}),
+        });
         i += 2;
         continue;
       }
-      out.push({ type: "line", chords, lyrics: "" });
+      out.push({
+        type: "line",
+        chords,
+        lyrics: "",
+        ...(chordPositions.length > 0 ? { chordPositions } : {}),
+      });
       i += 1;
       continue;
     }
@@ -71,7 +99,64 @@ export function parsedSectionsToJson(sections: ParsedSection[]): string {
 }
 
 export function parseParsedSectionsJson(json: string): ParsedSection[] {
-  return JSON.parse(json) as ParsedSection[];
+  const raw = JSON.parse(json) as unknown;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const out: ParsedSection[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const section = item as Record<string, unknown>;
+    if (section.type === "section_header" && typeof section.label === "string") {
+      out.push({
+        type: "section_header",
+        label: section.label,
+      });
+      continue;
+    }
+    if (section.type !== "line") {
+      continue;
+    }
+
+    const lyrics = typeof section.lyrics === "string" ? section.lyrics : "";
+    const normalizedChordPositions = Array.isArray(section.chordPositions)
+      ? section.chordPositions
+          .map((cp) => {
+            if (!cp || typeof cp !== "object") {
+              return null;
+            }
+            const rawPos = cp as Record<string, unknown>;
+            if (typeof rawPos.chord !== "string" || typeof rawPos.charIndex !== "number") {
+              return null;
+            }
+            if (!Number.isFinite(rawPos.charIndex)) {
+              return null;
+            }
+            return {
+              chord: rawPos.chord,
+              charIndex: Math.max(0, Math.floor(rawPos.charIndex)),
+            };
+          })
+          .filter((cp): cp is NonNullable<typeof cp> => cp !== null)
+      : [];
+
+    const chordsFromArray = Array.isArray(section.chords)
+      ? section.chords.filter((c): c is string => typeof c === "string")
+      : [];
+    const chords = chordsFromArray.length > 0 ? chordsFromArray : normalizedChordPositions.map((c) => c.chord);
+
+    out.push({
+      type: "line",
+      lyrics,
+      chords,
+      ...(normalizedChordPositions.length > 0 ? { chordPositions: normalizedChordPositions } : {}),
+    });
+  }
+
+  return out;
 }
 
 /**

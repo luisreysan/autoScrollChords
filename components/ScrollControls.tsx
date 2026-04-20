@@ -1,13 +1,16 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Minus, Pause, Play, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import type { ScrollMode } from "@/lib/types";
 
 import { cn } from "@/lib/utils";
+
+const MIN_MANUAL_SPEED = 0.1;
+const MAX_MANUAL_SPEED = 3.0;
+const MANUAL_SPEED_STEP = 0.1;
 
 type ScrollControlsProps = {
   isPlaying: boolean;
@@ -22,6 +25,13 @@ type ScrollControlsProps = {
   onManualSpeedChange: (value: number) => void;
 };
 
+function formatSecondsAsMinutes(seconds: number): string {
+  const safe = Math.max(1, Math.floor(seconds));
+  const minutes = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+}
+
 export function ScrollControls({
   isPlaying,
   onPlayPause,
@@ -34,6 +44,17 @@ export function ScrollControls({
   manualSpeed,
   onManualSpeedChange,
 }: ScrollControlsProps) {
+  const clampedManualSpeed = Number(
+    Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, manualSpeed)).toFixed(1),
+  );
+
+  const adjustManualSpeed = (delta: number) => {
+    const next = clampedManualSpeed + delta;
+    onManualSpeedChange(
+      Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, next)).toFixed(1)),
+    );
+  };
+
   return (
     <div className="flex flex-col gap-4 px-2 py-3">
       <div className="flex items-center justify-center gap-4">
@@ -72,21 +93,48 @@ export function ScrollControls({
           {mode === "manual" ? (
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <Label htmlFor="speed-slider">Speed</Label>
-                <span className="font-mono tabular-nums">{manualSpeed}</span>
+                <Label htmlFor="manual-speed-input">Speed</Label>
+                <span className="font-mono tabular-nums">{clampedManualSpeed.toFixed(1)}</span>
               </div>
-              <Slider
-                id="speed-slider"
-                min={1}
-                max={10}
-                step={1}
-                value={[manualSpeed]}
-                onValueChange={(v) => {
-                  const next = Array.isArray(v) ? v[0] : v;
-                  onManualSpeedChange(typeof next === "number" ? next : 5);
-                }}
-                className="py-1"
-              />
+              <div className="flex h-11 items-center rounded-full border border-input bg-background px-2">
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"
+                  onClick={() => adjustManualSpeed(-MANUAL_SPEED_STEP)}
+                  aria-label="Decrease manual speed"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <input
+                  id="manual-speed-input"
+                  type="text"
+                  inputMode="decimal"
+                  className="h-full w-full border-none bg-transparent px-2 text-center font-mono text-base tabular-nums outline-none"
+                  value={clampedManualSpeed.toFixed(1)}
+                  onChange={(e) => {
+                    const normalized = e.target.value.replace(",", ".").trim();
+                    if (!normalized) {
+                      return;
+                    }
+                    const parsed = Number.parseFloat(normalized);
+                    if (Number.isFinite(parsed)) {
+                      onManualSpeedChange(
+                        Number(
+                          Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, parsed)).toFixed(1),
+                        ),
+                      );
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"
+                  onClick={() => adjustManualSpeed(MANUAL_SPEED_STEP)}
+                  aria-label="Increase manual speed"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
@@ -100,7 +148,7 @@ export function ScrollControls({
                 min={1}
                 className="h-11 min-h-[44px] w-full rounded-lg border border-input bg-background px-3 font-mono text-sm"
                 value={durationSeconds ?? ""}
-                placeholder="e.g. 180"
+                placeholder="e.g. 180 (3:00)"
                 onChange={(e) => {
                   const raw = e.target.value;
                   if (raw === "") {
@@ -113,6 +161,11 @@ export function ScrollControls({
                   }
                 }}
               />
+              {durationSeconds && durationSeconds > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Formatted: <span className="font-mono">{formatSecondsAsMinutes(durationSeconds)}</span>
+                </p>
+              ) : null}
             </div>
           )}
         </div>

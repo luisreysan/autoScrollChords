@@ -26,9 +26,14 @@ export function useAutoScroll({
   const lastTsRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const pxPerMsRef = useRef(0);
+  const manualSpeedRef = useRef(manualSpeed);
   const virtualScrollTopRef = useRef(0);
   const loopRunningRef = useRef(false);
   const debugUntilRef = useRef(0);
+
+  useEffect(() => {
+    manualSpeedRef.current = manualSpeed;
+  }, [manualSpeed]);
 
   const stopRaf = useCallback(() => {
     if (rafRef.current != null) {
@@ -72,9 +77,9 @@ export function useAutoScroll({
     if (mode === "duration" && durationSeconds && durationSeconds > 0) {
       pxPerMsRef.current = maxScroll / (durationSeconds * 1000);
     } else {
-      // Manual mode needs visibly faster movement on mobile screens.
-      // Slider 1..10 -> 0.12..1.20 px/ms
-      pxPerMsRef.current = Math.max(0.14, manualSpeed * 0.14);
+      // Decimal speed control (0.1..3.0) tuned for easier live adjustment.
+      const clampedSpeed = Math.min(3, Math.max(0.1, manualSpeedRef.current));
+      pxPerMsRef.current = clampedSpeed * 0.5;
     }
 
     debugUntilRef.current =
@@ -117,6 +122,11 @@ export function useAutoScroll({
         return;
       }
 
+      if (mode === "manual") {
+        const clampedSpeed = Math.min(3, Math.max(0.1, manualSpeedRef.current));
+        pxPerMsRef.current = clampedSpeed * 0.5;
+      }
+
       virtualScrollTopRef.current = Math.min(
         max,
         Math.max(0, virtualScrollTopRef.current + pxPerMsRef.current * dt),
@@ -156,7 +166,6 @@ export function useAutoScroll({
     isPlaying,
     mode,
     durationSeconds,
-    manualSpeed,
     onPlayingChange,
     onProgress,
     scrollRef,

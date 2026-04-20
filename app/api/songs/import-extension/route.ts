@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { songContents, songs } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { parseTabText, parsedSectionsToJson } from "@/lib/parser";
-import type { ExtensionImportPayload } from "@/lib/types";
+import type { ExtensionImportPayload, ParsedSection } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -42,6 +42,7 @@ function parseBody(raw: unknown): ExtensionImportPayload | null {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const artist = typeof body.artist === "string" ? body.artist.trim() : "";
   const rawText = typeof body.rawText === "string" ? body.rawText : "";
+  const positionedSections = parsePositionedSections(body.positionedSections);
   const tuning = typeof body.tuning === "string" ? body.tuning.trim() : null;
   const difficulty = typeof body.difficulty === "string" ? body.difficulty.trim() : null;
   const capo = parseCapo(body.capo);
@@ -55,10 +56,69 @@ function parseBody(raw: unknown): ExtensionImportPayload | null {
     title,
     artist,
     rawText,
+    positionedSections,
     tuning,
     difficulty,
     capo,
   };
+}
+
+function parsePositionedSections(value: unknown): ParsedSection[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const sections: ParsedSection[] = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (raw.type === "section_header" && typeof raw.label === "string" && raw.label.trim()) {
+      sections.push({
+        type: "section_header",
+        label: raw.label.trim(),
+      });
+      continue;
+    }
+
+    if (raw.type === "line" && typeof raw.lyrics === "string") {
+      const chords = Array.isArray(raw.chords)
+        ? raw.chords.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+        : [];
+
+      const chordPositions = Array.isArray(raw.chordPositions)
+        ? raw.chordPositions
+            .map((cp) => {
+              if (!cp || typeof cp !== "object") {
+                return null;
+              }
+              const rawPos = cp as Record<string, unknown>;
+              if (typeof rawPos.chord !== "string" || typeof rawPos.charIndex !== "number") {
+                return null;
+              }
+              if (!Number.isFinite(rawPos.charIndex)) {
+                return null;
+              }
+              return {
+                chord: rawPos.chord.trim(),
+                charIndex: Math.max(0, Math.floor(rawPos.charIndex)),
+              };
+            })
+            .filter((cp): cp is NonNullable<typeof cp> => Boolean(cp))
+        : undefined;
+
+      sections.push({
+        type: "line",
+        lyrics: raw.lyrics,
+        chords,
+        ...(chordPositions && chordPositions.length > 0 ? { chordPositions } : {}),
+      });
+    }
+  }
+
+  return sections.length > 0 ? sections : undefined;
 }
 
 export async function POST(request: Request) {
@@ -94,7 +154,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Ultimate Guitar tab URL" }, { status: 400 });
   }
 
-  const parsed = parseTabText(body.rawText);
+  const parsed = body.positionedSections && body.positionedSections.length > 0
+    ? body.positionedSections
+    : parseTabText(body.rawText);
   if (parsed.length === 0) {
     return NextResponse.json({ error: "Could not parse tab content" }, { status: 422 });
   }

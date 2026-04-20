@@ -1,4 +1,7 @@
 ﻿const SECTION_HEADERS = ["Verse", "Chorus", "Bridge", "Intro", "Outro", "Pre-Chorus"];
+const CHORD_TOKEN =
+  /^(?:N\.?C\.?|[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?(?:\d+)?(?:\/[A-G](?:#|b)?)?)$/i;
+const SECTION_HEADER_LINE = /^\[([A-Z][^\]]*)\]$/;
 
 function firstText(selectors) {
   for (const selector of selectors) {
@@ -55,6 +58,88 @@ function containsChordHints(rawText) {
   return hasSection || hasChordLikeLine;
 }
 
+function isChordLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const parts = trimmed.split(/\s+/);
+  return parts.every((p) => CHORD_TOKEN.test(p));
+}
+
+function extractChordPositions(line) {
+  const out = [];
+  const tokenRe = /\S+/g;
+  let match;
+  while ((match = tokenRe.exec(line)) !== null) {
+    const token = match[0];
+    if (!CHORD_TOKEN.test(token)) {
+      continue;
+    }
+    out.push({
+      chord: token,
+      charIndex: match.index,
+    });
+  }
+  return out;
+}
+
+function parsePositionedSections(raw) {
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] || "";
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+
+    const sectionMatch = trimmed.match(SECTION_HEADER_LINE);
+    if (sectionMatch) {
+      out.push({ type: "section_header", label: sectionMatch[1].trim() });
+      i += 1;
+      continue;
+    }
+
+    if (isChordLine(line)) {
+      const chordPositions = extractChordPositions(line);
+      const chords = chordPositions.map((c) => c.chord);
+      const next = lines[i + 1];
+      if (next !== undefined) {
+        const nextTrimmed = next.trim();
+        if (nextTrimmed && !isChordLine(next) && !SECTION_HEADER_LINE.test(nextTrimmed)) {
+          out.push({
+            type: "line",
+            chords,
+            lyrics: next,
+            chordPositions,
+          });
+          i += 2;
+          continue;
+        }
+      }
+
+      out.push({
+        type: "line",
+        chords,
+        lyrics: "",
+        chordPositions,
+      });
+      i += 1;
+      continue;
+    }
+
+    out.push({ type: "line", chords: [], lyrics: line });
+    i += 1;
+  }
+
+  return out;
+}
+
 function extractSongData() {
   const sourceUrl = window.location.href;
   const titleRaw = firstText(["main h1", "h1"]);
@@ -97,6 +182,7 @@ function extractSongData() {
     title,
     artist,
     rawText,
+    positionedSections: parsePositionedSections(rawText),
     tuning,
     capo,
     difficulty,

@@ -41,13 +41,30 @@ export function ChordViewer({ sections, fontSizeClass = "text-base", className }
 
         return (
           <div key={`l-${idx}`} className="mb-4">
-            {section.chords.length > 0 && (
+            {section.chordPositions && section.chordPositions.length > 0 ? (
+              <div className="mb-1 min-h-6 overflow-x-auto">
+                <div
+                  className="relative h-6 min-w-full"
+                  style={{ width: `${Math.max(section.lyrics.length + 4, 24)}ch` }}
+                >
+                  {section.chordPositions.map((cp, i) => (
+                    <span
+                      key={`${idx}-cp-${i}`}
+                      className="absolute top-0"
+                      style={{ left: `${cp.charIndex}ch` }}
+                    >
+                      <ChordToken chord={cp.chord} />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : section.chords.length > 0 ? (
               <div className="mb-1 flex flex-wrap gap-x-2 gap-y-1">
                 {section.chords.map((c, i) => (
                   <ChordToken key={`${idx}-c-${i}`} chord={c} />
                 ))}
               </div>
-            )}
+            ) : null}
             <p className="whitespace-pre-wrap text-foreground">{section.lyrics}</p>
           </div>
         );
