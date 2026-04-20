@@ -10,12 +10,39 @@ type ChordViewerProps = {
   className?: string;
 };
 
+type ChordRenderSlot = {
+  chord: string;
+  originalCharIndex: number;
+  renderCharIndex: number;
+};
+
 function ChordToken({ chord }: { chord: string }) {
   return (
     <span className="inline-flex items-center rounded bg-blue-100 px-1 py-0.5 font-mono text-blue-700">
       {chord}
     </span>
   );
+}
+
+function buildChordRenderSlots(section: Extract<ParsedSection, { type: "line" }>): ChordRenderSlot[] {
+  const positions = section.chordPositions ?? [];
+  if (positions.length === 0) {
+    return [];
+  }
+
+  const sorted = [...positions].sort((a, b) => a.charIndex - b.charIndex);
+  const slots: ChordRenderSlot[] = [];
+  for (const cp of sorted) {
+    const prev = slots[slots.length - 1];
+    const minStart = prev ? prev.renderCharIndex + prev.chord.length + 1 : 0;
+    const renderCharIndex = Math.max(cp.charIndex, minStart);
+    slots.push({
+      chord: cp.chord,
+      originalCharIndex: cp.charIndex,
+      renderCharIndex,
+    });
+  }
+  return slots;
 }
 
 export function ChordViewer({ sections, fontSizeClass = "text-base", className }: ChordViewerProps) {
@@ -43,20 +70,34 @@ export function ChordViewer({ sections, fontSizeClass = "text-base", className }
           <div key={`l-${idx}`} className="mb-4">
             {section.chordPositions && section.chordPositions.length > 0 ? (
               <div className="mb-1 min-h-6 overflow-x-auto">
-                <div
-                  className="relative h-6 min-w-full"
-                  style={{ width: `${Math.max(section.lyrics.length + 4, 24)}ch` }}
-                >
-                  {section.chordPositions.map((cp, i) => (
-                    <span
-                      key={`${idx}-cp-${i}`}
-                      className="absolute top-0"
-                      style={{ left: `${cp.charIndex}ch` }}
-                    >
-                      <ChordToken chord={cp.chord} />
-                    </span>
-                  ))}
-                </div>
+                {(() => {
+                  const slots = buildChordRenderSlots(section);
+                  const lineLength = section.lineLength ?? section.lyrics.length;
+                  const requiredFromSlots = slots.reduce(
+                    (max, slot) => Math.max(max, slot.renderCharIndex + slot.chord.length),
+                    0,
+                  );
+                  const gridWidth = Math.max(24, lineLength + 2, requiredFromSlots + 1);
+
+                  return (
+                    <div className="relative h-6 min-w-full" style={{ width: `${gridWidth}ch` }}>
+                      {slots.map((slot, i) => (
+                        <span
+                          key={`${idx}-cp-${i}`}
+                          className="absolute top-0"
+                          title={
+                            slot.renderCharIndex !== slot.originalCharIndex
+                              ? `Adjusted from column ${slot.originalCharIndex}`
+                              : undefined
+                          }
+                          style={{ left: `${slot.renderCharIndex}ch` }}
+                        >
+                          <ChordToken chord={slot.chord} />
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ) : section.chords.length > 0 ? (
               <div className="mb-1 flex flex-wrap gap-x-2 gap-y-1">

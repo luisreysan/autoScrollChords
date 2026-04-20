@@ -5,7 +5,14 @@ export type ChordPosition = {
 
 export type ParsedSection =
   | { type: "section_header"; label: string }
-  | { type: "line"; chords: string[]; lyrics: string; chordPositions?: ChordPosition[] };
+  | {
+      type: "line";
+      chords: string[];
+      lyrics: string;
+      chordPositions?: ChordPosition[];
+      lineLength?: number;
+      chordLineRaw?: string;
+    };
 
 export type ScrollMode = "duration" | "manual";
 

@@ -2,6 +2,7 @@
 const CHORD_TOKEN =
   /^(?:N\.?C\.?|[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?(?:\d+)?(?:\/[A-G](?:#|b)?)?)$/i;
 const SECTION_HEADER_LINE = /^\[([A-Z][^\]]*)\]$/;
+const TAB_WIDTH = 4;
 
 function firstText(selectors) {
   for (const selector of selectors) {
@@ -59,7 +60,8 @@ function containsChordHints(rawText) {
 }
 
 function isChordLine(line) {
-  const trimmed = line.trim();
+  const normalized = normalizeLineWhitespace(line);
+  const trimmed = normalized.trim();
   if (!trimmed) {
     return false;
   }
@@ -67,11 +69,16 @@ function isChordLine(line) {
   return parts.every((p) => CHORD_TOKEN.test(p));
 }
 
+function normalizeLineWhitespace(line) {
+  return line.replace(/\u00A0/g, " ").replace(/\t/g, " ".repeat(TAB_WIDTH));
+}
+
 function extractChordPositions(line) {
+  const normalized = normalizeLineWhitespace(line);
   const out = [];
   const tokenRe = /\S+/g;
   let match;
-  while ((match = tokenRe.exec(line)) !== null) {
+  while ((match = tokenRe.exec(normalized)) !== null) {
     const token = match[0];
     if (!CHORD_TOKEN.test(token)) {
       continue;
@@ -91,6 +98,7 @@ function parsePositionedSections(raw) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] || "";
+    const normalizedLine = normalizeLineWhitespace(line);
     const trimmed = line.trim();
 
     if (!trimmed) {
@@ -112,11 +120,14 @@ function parsePositionedSections(raw) {
       if (next !== undefined) {
         const nextTrimmed = next.trim();
         if (nextTrimmed && !isChordLine(next) && !SECTION_HEADER_LINE.test(nextTrimmed)) {
+          const normalizedLyrics = normalizeLineWhitespace(next);
           out.push({
             type: "line",
             chords,
-            lyrics: next,
+            lyrics: normalizedLyrics,
             chordPositions,
+            lineLength: Math.max(normalizedLine.length, normalizedLyrics.length),
+            chordLineRaw: normalizedLine,
           });
           i += 2;
           continue;
@@ -128,12 +139,19 @@ function parsePositionedSections(raw) {
         chords,
         lyrics: "",
         chordPositions,
+        lineLength: normalizedLine.length,
+        chordLineRaw: normalizedLine,
       });
       i += 1;
       continue;
     }
 
-    out.push({ type: "line", chords: [], lyrics: line });
+    out.push({
+      type: "line",
+      chords: [],
+      lyrics: normalizedLine,
+      lineLength: normalizedLine.length,
+    });
     i += 1;
   }
 

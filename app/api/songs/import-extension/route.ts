@@ -84,6 +84,7 @@ function parsePositionedSections(value: unknown): ParsedSection[] | undefined {
     }
 
     if (raw.type === "line" && typeof raw.lyrics === "string") {
+      const lyrics = raw.lyrics.replace(/\u00A0/g, " ").replace(/\t/g, "    ");
       const chords = Array.isArray(raw.chords)
         ? raw.chords.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
         : [];
@@ -109,11 +110,27 @@ function parsePositionedSections(value: unknown): ParsedSection[] | undefined {
             .filter((cp): cp is NonNullable<typeof cp> => Boolean(cp))
         : undefined;
 
+      const lineLengthRaw = typeof raw.lineLength === "number" && Number.isFinite(raw.lineLength)
+        ? Math.max(0, Math.floor(raw.lineLength))
+        : undefined;
+      const chordLineRaw = typeof raw.chordLineRaw === "string"
+        ? raw.chordLineRaw.replace(/\u00A0/g, " ").replace(/\t/g, "    ")
+        : undefined;
+
+      const inferredLineLength = Math.max(
+        lyrics.length,
+        chordLineRaw?.length ?? 0,
+        ...(chordPositions?.map((cp) => cp.charIndex + cp.chord.length) ?? [0]),
+      );
+      const lineLength = Math.max(lineLengthRaw ?? 0, inferredLineLength);
+
       sections.push({
         type: "line",
-        lyrics: raw.lyrics,
+        lyrics,
         chords,
         ...(chordPositions && chordPositions.length > 0 ? { chordPositions } : {}),
+        ...(lineLength > 0 ? { lineLength } : {}),
+        ...(chordLineRaw && chordLineRaw.length > 0 ? { chordLineRaw } : {}),
       });
     }
   }
@@ -170,10 +187,47 @@ export async function POST(request: Request) {
       .where(eq(songContents.songId, existing[0].id))
       .limit(1);
 
+    await db.transaction(async (tx) => {
+      await tx
+        .update(songs)
+        .set({
+          title: body.title,
+          artist: body.artist,
+          tuning: body.tuning ?? null,
+          capo: body.capo ?? null,
+          difficulty: body.difficulty ?? null,
+        })
+        .where(eq(songs.id, existing[0].id));
+
+      if (content[0]) {
+        await tx
+          .update(songContents)
+          .set({
+            rawText: body.rawText.trim(),
+            parsedSections: parsedSectionsToJson(parsed),
+          })
+          .where(eq(songContents.id, content[0].id));
+      } else {
+        await tx.insert(songContents).values({
+          id: randomUUID(),
+          songId: existing[0].id,
+          rawText: body.rawText.trim(),
+          parsedSections: parsedSectionsToJson(parsed),
+        });
+      }
+    });
+
+    const refreshedSong = await db.select().from(songs).where(eq(songs.id, existing[0].id)).limit(1);
+    const refreshedContent = await db
+      .select()
+      .from(songContents)
+      .where(eq(songContents.songId, existing[0].id))
+      .limit(1);
+
     return NextResponse.json({
       isNew: false,
-      song: existing[0],
-      content: content[0] ?? null,
+      song: refreshedSong[0] ?? existing[0],
+      content: refreshedContent[0] ?? null,
     });
   }
 

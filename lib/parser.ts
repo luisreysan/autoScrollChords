@@ -3,13 +3,19 @@ import type { ChordPosition, ParsedSection } from "@/lib/types";
 /** Matches common guitar chord symbols (letters, #/b, sus/add/dim/aug variants, slash bass). */
 const CHORD_TOKEN =
   /^(?:N\.?C\.?|[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?(?:\d+)?(?:\/[A-G](?:#|b)?)?)$/i;
+const TAB_WIDTH = 4;
+
+function normalizeLineWhitespace(line: string): string {
+  return line.replace(/\u00A0/g, " ").replace(/\t/g, " ".repeat(TAB_WIDTH));
+}
 
 function isChordLine(line: string): boolean {
+  const normalized = normalizeLineWhitespace(line);
   const trimmed = line.trim();
   if (!trimmed) {
     return false;
   }
-  const parts = trimmed.split(/\s+/);
+  const parts = normalized.trim().split(/\s+/);
   return parts.every((p) => CHORD_TOKEN.test(p));
 }
 
@@ -21,10 +27,11 @@ function splitChordTokens(line: string): string[] {
 }
 
 function extractChordPositions(line: string): ChordPosition[] {
+  const normalized = normalizeLineWhitespace(line);
   const out: ChordPosition[] = [];
   const tokenRe = /\S+/g;
   let match: RegExpExecArray | null;
-  while ((match = tokenRe.exec(line)) !== null) {
+  while ((match = tokenRe.exec(normalized)) !== null) {
     const token = match[0];
     if (!CHORD_TOKEN.test(token)) {
       continue;
@@ -49,6 +56,7 @@ export function parseTabText(raw: string): ParsedSection[] {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] ?? "";
+    const normalizedLine = normalizeLineWhitespace(line);
     const trimmed = line.trim();
 
     if (!trimmed) {
@@ -68,10 +76,13 @@ export function parseTabText(raw: string): ParsedSection[] {
       const chords = chordPositions.length > 0 ? chordPositions.map((c) => c.chord) : splitChordTokens(trimmed);
       const next = lines[i + 1];
       if (next !== undefined && !isChordLine(next.trim()) && !next.trim().match(SECTION_HEADER)) {
+        const normalizedLyrics = normalizeLineWhitespace(next);
         out.push({
           type: "line",
           chords,
-          lyrics: next,
+          lyrics: normalizedLyrics,
+          lineLength: Math.max(normalizedLine.length, normalizedLyrics.length),
+          chordLineRaw: normalizedLine,
           ...(chordPositions.length > 0 ? { chordPositions } : {}),
         });
         i += 2;
@@ -81,13 +92,20 @@ export function parseTabText(raw: string): ParsedSection[] {
         type: "line",
         chords,
         lyrics: "",
+        lineLength: normalizedLine.length,
+        chordLineRaw: normalizedLine,
         ...(chordPositions.length > 0 ? { chordPositions } : {}),
       });
       i += 1;
       continue;
     }
 
-    out.push({ type: "line", chords: [], lyrics: line });
+    out.push({
+      type: "line",
+      chords: [],
+      lyrics: normalizedLine,
+      lineLength: normalizedLine.length,
+    });
     i += 1;
   }
 
@@ -121,8 +139,12 @@ export function parseParsedSectionsJson(json: string): ParsedSection[] {
       continue;
     }
 
-    const lyrics = typeof section.lyrics === "string" ? section.lyrics : "";
-    const normalizedChordPositions = Array.isArray(section.chordPositions)
+    const lyrics = normalizeLineWhitespace(typeof section.lyrics === "string" ? section.lyrics : "");
+    const chordLineRaw = typeof section.chordLineRaw === "string"
+      ? normalizeLineWhitespace(section.chordLineRaw)
+      : undefined;
+
+    const rawChordPositions = Array.isArray(section.chordPositions)
       ? section.chordPositions
           .map((cp) => {
             if (!cp || typeof cp !== "object") {
@@ -136,12 +158,33 @@ export function parseParsedSectionsJson(json: string): ParsedSection[] {
               return null;
             }
             return {
-              chord: rawPos.chord,
+              chord: rawPos.chord.trim(),
               charIndex: Math.max(0, Math.floor(rawPos.charIndex)),
             };
           })
           .filter((cp): cp is NonNullable<typeof cp> => cp !== null)
       : [];
+
+    const inferredLineLength = Math.max(
+      lyrics.length,
+      chordLineRaw?.length ?? 0,
+      ...rawChordPositions.map((cp) => cp.charIndex + cp.chord.length),
+      0,
+    );
+    const lineLength = typeof section.lineLength === "number" && Number.isFinite(section.lineLength)
+      ? Math.max(0, Math.floor(section.lineLength), inferredLineLength)
+      : inferredLineLength;
+
+    const normalizedChordPositions = rawChordPositions
+      .map((cp) => ({
+        chord: cp.chord,
+        charIndex: Math.min(cp.charIndex, Math.max(0, lineLength - 1)),
+      }))
+      .sort((a, b) => a.charIndex - b.charIndex)
+      .filter((cp, index, arr) => {
+        const prev = arr[index - 1];
+        return !(prev && prev.charIndex === cp.charIndex && prev.chord === cp.chord);
+      });
 
     const chordsFromArray = Array.isArray(section.chords)
       ? section.chords.filter((c): c is string => typeof c === "string")
@@ -153,6 +196,8 @@ export function parseParsedSectionsJson(json: string): ParsedSection[] {
       lyrics,
       chords,
       ...(normalizedChordPositions.length > 0 ? { chordPositions: normalizedChordPositions } : {}),
+      ...(lineLength > 0 ? { lineLength } : {}),
+      ...(chordLineRaw && chordLineRaw.length > 0 ? { chordLineRaw } : {}),
     });
   }
 
