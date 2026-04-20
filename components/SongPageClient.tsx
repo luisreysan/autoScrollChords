@@ -34,7 +34,9 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   const [fontStep, setFontStep] = useState(1);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [mode, setMode] = useState<ScrollMode>(song.scrollMode ?? "duration");
+  const initialMode: ScrollMode =
+    song.scrollMode ?? (song.durationSeconds && song.durationSeconds > 0 ? "duration" : "manual");
+  const [mode, setMode] = useState<ScrollMode>(initialMode);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(song.durationSeconds);
   const [manualSpeed, setManualSpeed] = useState(() => {
     const s = song.scrollSpeed;
@@ -133,7 +135,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
   const togglePlay = () => {
     if (mode === "duration" && (!durationSeconds || durationSeconds <= 0)) {
-      toast.message("Set a duration in seconds before playing in duration mode.");
+      toast.message("Set a duration in seconds or switch to manual mode.");
       return;
     }
     setIsPlaying((p) => !p);
