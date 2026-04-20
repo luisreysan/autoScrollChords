@@ -11,6 +11,21 @@ type ChordViewerProps = {
   className?: string;
 };
 
+const CHORD_TOKEN =
+  /^(?:N\.?C\.?|[A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?(?:\d+)?(?:\/[A-G](?:#|b)?)?)$/i;
+
+function isChordOnlyLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (/^\[[^\]]+\]$/.test(trimmed)) {
+    return false;
+  }
+  const parts = trimmed.split(/\s+/);
+  return parts.length > 0 && parts.every((p) => CHORD_TOKEN.test(p));
+}
+
 type ChordRenderSlot = {
   chord: string;
   originalCharIndex: number;
@@ -70,6 +85,7 @@ function buildChordRenderSlots(section: Extract<ParsedSection, { type: "line" }>
 
 export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", className }: ChordViewerProps) {
   if (tabText && tabText.trim().length > 0) {
+    const lines = tabText.replace(/\r\n/g, "\n").split("\n");
     return (
       <div
         className={cn(
@@ -78,7 +94,14 @@ export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", cl
           className,
         )}
       >
-        <pre className="min-w-full whitespace-pre bg-transparent p-0">{tabText}</pre>
+        <pre className="min-w-full whitespace-pre bg-transparent p-0">
+          {lines.map((line, idx) => (
+            <span key={`pre-line-${idx}`} className={isChordOnlyLine(line) ? "font-bold" : undefined}>
+              {line}
+              {idx < lines.length - 1 ? "\n" : ""}
+            </span>
+          ))}
+        </pre>
       </div>
     );
   }

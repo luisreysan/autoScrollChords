@@ -9,7 +9,7 @@ import type { ScrollMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MIN_MANUAL_SPEED = 0.1;
-const MAX_MANUAL_SPEED = 3.0;
+const MAX_MANUAL_SPEED = 30.0;
 const MANUAL_SPEED_STEP = 0.1;
 
 type ScrollControlsProps = {

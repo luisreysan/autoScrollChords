@@ -25,7 +25,7 @@ type SongPageClientProps = {
 
 const FONT_STEPS = ["text-sm", "text-base", "text-lg"] as const;
 const MIN_MANUAL_SPEED = 0.1;
-const MAX_MANUAL_SPEED = 3.0;
+const MAX_MANUAL_SPEED = 30.0;
 
 export function SongPageClient({ song, content }: SongPageClientProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -42,13 +42,14 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     const s = song.scrollSpeed;
     if (typeof s === "number" && Number.isFinite(s)) {
       // Backward compatibility:
-      // old values were mostly 1..18 integers. Convert to decimal speed scale.
-      if (s > MAX_MANUAL_SPEED) {
-        return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s * 0.03)).toFixed(1));
+      // Previous decimal range was 0.1..3.0. New range is 0.1..30.0 where 1.0 ~= old 0.1.
+      if (s > 0 && s <= 3) {
+        return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s * 10)).toFixed(1));
       }
+      // Older integer-style values (and already-migrated values) remain valid in new range.
       return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s)).toFixed(1));
     }
-    return 0.3;
+    return 1.0;
   });
 
   const [hasScrollableContent, setHasScrollableContent] = useState(true);

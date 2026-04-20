@@ -77,9 +77,11 @@ export function useAutoScroll({
     if (mode === "duration" && durationSeconds && durationSeconds > 0) {
       pxPerMsRef.current = maxScroll / (durationSeconds * 1000);
     } else {
-      // Decimal speed control (0.1..3.0) tuned for easier live adjustment.
-      const clampedSpeed = Math.min(3, Math.max(0.1, manualSpeedRef.current));
-      pxPerMsRef.current = clampedSpeed * 0.5;
+      // New manual scale:
+      // 1.0 ~= previous 0.1 speed, with 10 levels below (0.1..0.9).
+      // Range 0.1..30.0 maps to 0.005..1.5 px/ms.
+      const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
+      pxPerMsRef.current = clampedSpeed * 0.05;
     }
 
     debugUntilRef.current =
@@ -123,8 +125,8 @@ export function useAutoScroll({
       }
 
       if (mode === "manual") {
-        const clampedSpeed = Math.min(3, Math.max(0.1, manualSpeedRef.current));
-        pxPerMsRef.current = clampedSpeed * 0.5;
+        const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
+        pxPerMsRef.current = clampedSpeed * 0.05;
       }
 
       virtualScrollTopRef.current = Math.min(
