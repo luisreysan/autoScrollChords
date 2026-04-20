@@ -175,7 +175,7 @@ export function parseParsedSectionsJson(json: string): ParsedSection[] {
       ? Math.max(0, Math.floor(section.lineLength), inferredLineLength)
       : inferredLineLength;
 
-    const normalizedChordPositions = rawChordPositions
+    let normalizedChordPositions = rawChordPositions
       .map((cp) => ({
         chord: cp.chord,
         charIndex: Math.min(cp.charIndex, Math.max(0, lineLength - 1)),
@@ -185,6 +185,32 @@ export function parseParsedSectionsJson(json: string): ParsedSection[] {
         const prev = arr[index - 1];
         return !(prev && prev.charIndex === cp.charIndex && prev.chord === cp.chord);
       });
+
+    // Some UG exports may collapse chord spacing (e.g. "F Am G Dm"), producing
+    // valid but low-range offsets near column 0. When we have a much longer lyric
+    // line, rescale offsets proportionally to preserve musical alignment intent.
+    const chordSpread =
+      normalizedChordPositions.length > 1
+        ? normalizedChordPositions[normalizedChordPositions.length - 1]!.charIndex -
+          normalizedChordPositions[0]!.charIndex
+        : 0;
+    const hasCompressedOffsets =
+      normalizedChordPositions.length >= 2 &&
+      lineLength >= 24 &&
+      chordSpread <= Math.max(2, normalizedChordPositions.length * 2) &&
+      (chordLineRaw?.length ?? 0) >= normalizedChordPositions.length + 1;
+
+    if (hasCompressedOffsets) {
+      const sourceLen = Math.max(1, (chordLineRaw?.length ?? lineLength) - 1);
+      const targetLen = Math.max(1, lineLength - 1);
+      normalizedChordPositions = normalizedChordPositions.map((cp) => ({
+        chord: cp.chord,
+        charIndex: Math.min(
+          targetLen,
+          Math.max(0, Math.round((cp.charIndex / sourceLen) * targetLen)),
+        ),
+      }));
+    }
 
     const chordsFromArray = Array.isArray(section.chords)
       ? section.chords.filter((c): c is string => typeof c === "string")

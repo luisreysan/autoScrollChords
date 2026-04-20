@@ -31,8 +31,30 @@ function buildChordRenderSlots(section: Extract<ParsedSection, { type: "line" }>
   }
 
   const sorted = [...positions].sort((a, b) => a.charIndex - b.charIndex);
+  const lineLength = section.lineLength ?? section.lyrics.length;
+  const spread = sorted.length > 1 ? sorted[sorted.length - 1]!.charIndex - sorted[0]!.charIndex : 0;
+  const looksClusteredNearStart =
+    sorted.length >= 2 &&
+    lineLength >= 24 &&
+    spread <= Math.max(2, sorted.length * 2) &&
+    sorted[0]!.charIndex <= 1;
+
+  const wordStartColumns = Array.from(section.lyrics.matchAll(/\S+/g)).map((m) => m.index ?? 0);
+  let basePositions = sorted;
+  if (looksClusteredNearStart && wordStartColumns.length > 0) {
+    const maxIdx = Math.max(1, sorted.length - 1);
+    const maxWordIdx = Math.max(0, wordStartColumns.length - 1);
+    basePositions = sorted.map((cp, idx) => {
+      const wordIdx = Math.round((idx / maxIdx) * maxWordIdx);
+      return {
+        chord: cp.chord,
+        charIndex: wordStartColumns[wordIdx] ?? cp.charIndex,
+      };
+    });
+  }
+
   const slots: ChordRenderSlot[] = [];
-  for (const cp of sorted) {
+  for (const cp of basePositions) {
     const prev = slots[slots.length - 1];
     const minStart = prev ? prev.renderCharIndex + prev.chord.length + 1 : 0;
     const renderCharIndex = Math.max(cp.charIndex, minStart);
