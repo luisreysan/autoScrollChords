@@ -185,7 +185,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-background">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
       <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex max-w-lg items-center gap-2 px-3 py-3">
           <Link
@@ -246,7 +246,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
       <main
         ref={scrollRef}
-        className="mx-auto w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
+        className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
       >
         <div ref={scrollContentRef}>
           <ChordViewer sections={sections} fontSizeClass={fontClass} />
