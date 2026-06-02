@@ -22,6 +22,7 @@ type ScrollControlsProps = {
   playHint?: string | null;
   manualSpeed: number;
   onManualSpeedChange: (value: number) => void;
+  speedControlsDisabled?: boolean;
 };
 
 export function ScrollControls({
@@ -31,6 +32,7 @@ export function ScrollControls({
   playHint,
   manualSpeed,
   onManualSpeedChange,
+  speedControlsDisabled = false,
 }: ScrollControlsProps) {
   const clampedManualSpeed = Number(
     Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, manualSpeed)).toFixed(2),
@@ -65,6 +67,7 @@ export function ScrollControls({
             variant="secondary"
             className={speedButtonClassName}
             onClick={() => adjustManualSpeed(-MANUAL_SPEED_STEP)}
+            disabled={speedControlsDisabled}
             aria-label="Decrease manual speed"
           >
             <Minus className="size-6" />
@@ -81,6 +84,7 @@ export function ScrollControls({
             variant="secondary"
             className={speedButtonClassName}
             onClick={() => adjustManualSpeed(MANUAL_SPEED_STEP)}
+            disabled={speedControlsDisabled}
             aria-label="Increase manual speed"
           >
             <Plus className="size-6" />

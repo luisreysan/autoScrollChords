@@ -48,6 +48,18 @@ export const songContentsRelations = relations(songContents, ({ one }) => ({
   }),
 }));
 
+export const syncRooms = sqliteTable("sync_rooms", {
+  code: text("code").primaryKey(),
+  hostSecret: text("host_secret").notNull(),
+  songId: text("song_id").notNull(),
+  scrollRatio: real("scroll_ratio").notNull().default(0),
+  isPlaying: integer("is_playing").notNull().default(0),
+  manualSpeed: real("manual_speed").notNull().default(0.2),
+  fontStep: integer("font_step").notNull().default(1),
+  updatedAt: text("updated_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+});
+
 export type Song = typeof songs.$inferSelect;
 export type NewSong = typeof songs.$inferInsert;
 export type SongContent = typeof songContents.$inferSelect;

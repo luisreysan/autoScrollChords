@@ -8,10 +8,12 @@ import { cn } from "@/lib/utils";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ sync?: string }>;
 };
 
-export default async function SongPage({ params }: PageProps) {
+export default async function SongPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { sync: syncParam } = await searchParams;
 
   let data: Awaited<ReturnType<typeof getSongWithContent>>;
   try {
@@ -43,5 +45,11 @@ export default async function SongPage({ params }: PageProps) {
     notFound();
   }
 
-  return <SongPageClient song={data.song} content={data.content} />;
+  return (
+    <SongPageClient
+      song={data.song}
+      content={data.content}
+      initialSyncCode={typeof syncParam === "string" ? syncParam : null}
+    />
+  );
 }

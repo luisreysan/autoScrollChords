@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronUp, Settings2, Type } from "lucide-react";
+import { ChevronUp, Link2, Settings2, Type } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ChordViewer } from "@/components/ChordViewer";
+import { PairDialog } from "@/components/PairDialog";
 import { ScrollControls } from "@/components/ScrollControls";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -14,23 +15,35 @@ import {
 } from "@/components/ui/collapsible";
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { useSyncSession } from "@/hooks/useSyncSession";
 import { normalizeTabTextForDisplay, parseParsedSectionsJson, sectionsToTabText } from "@/lib/parser";
+import {
+  clearSyncSession,
+  isValidSyncCode,
+  loadSyncSession,
+  normalizeSyncCode,
+  saveSyncSession,
+  type SyncSession,
+} from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
 type SongPageClientProps = {
   song: Song;
   content: SongContent;
+  initialSyncCode?: string | null;
 };
 
 const FONT_STEPS = ["text-sm", "text-base", "text-lg"] as const;
 const MIN_MANUAL_SPEED = 0.1;
 const MAX_MANUAL_SPEED = 30.0;
 
-export function SongPageClient({ song, content }: SongPageClientProps) {
+export function SongPageClient({ song, content, initialSyncCode }: SongPageClientProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollContentRef = useRef<HTMLDivElement>(null);
   const [metaOpen, setMetaOpen] = useState(false);
   const [fontStep, setFontStep] = useState(1);
+  const [pairOpen, setPairOpen] = useState(false);
+  const [syncSession, setSyncSession] = useState<SyncSession | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [manualSpeed, setManualSpeed] = useState(() => {
@@ -58,6 +71,62 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   const fontClass = FONT_STEPS[fontStep] ?? FONT_STEPS[1];
 
   useEffect(() => {
+    const stored = loadSyncSession();
+    const urlCode = initialSyncCode ? normalizeSyncCode(initialSyncCode) : null;
+
+    if (stored) {
+      setSyncSession(stored);
+      return;
+    }
+
+    if (urlCode && isValidSyncCode(urlCode)) {
+      const followerSession: SyncSession = { role: "follower", code: urlCode };
+      saveSyncSession(followerSession);
+      setSyncSession(followerSession);
+    }
+  }, [initialSyncCode]);
+
+  const handleRoomLost = useCallback(() => {
+    clearSyncSession();
+    setSyncSession(null);
+    toast.message("Sync session ended or expired");
+  }, []);
+
+  const handleSessionChange = useCallback((session: SyncSession | null) => {
+    if (session) {
+      saveSyncSession(session);
+    } else {
+      clearSyncSession();
+    }
+    setSyncSession(session);
+  }, []);
+
+  const getScrollRatio = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return 0;
+    }
+    const max = Math.max(0, el.scrollHeight - el.clientHeight);
+    if (max <= 0) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, el.scrollTop / max));
+  }, []);
+
+  const { isFollower, isHost } = useSyncSession({
+    scrollRef,
+    songId: song.id,
+    syncSession,
+    isPlaying,
+    manualSpeed,
+    fontStep,
+    setIsPlaying,
+    setManualSpeed,
+    setFontStep,
+    onRoomLost: handleRoomLost,
+  });
+
+  useEffect(() => {
     const el = scrollRef.current;
     if (!el) {
       setHasScrollableContent(true);
@@ -65,7 +134,6 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     }
 
     const evaluateScrollable = () => {
-      // Use a small tolerance because Android viewport/toolbars can produce +/-1px noise.
       const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
       setHasScrollableContent(maxScroll > 1);
     };
@@ -88,13 +156,11 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
       });
     }
 
-    // Chrome Android can change effective viewport as URL bars expand/collapse.
     const viewport = window.visualViewport;
     viewport?.addEventListener("resize", evaluateScrollable);
     window.addEventListener("orientationchange", evaluateScrollable);
     window.addEventListener("resize", evaluateScrollable);
 
-    // Re-check after fonts and initial paints settle.
     const rafA = window.requestAnimationFrame(evaluateScrollable);
     const rafB = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(evaluateScrollable);
@@ -116,7 +182,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
   useAutoScroll({
     scrollRef,
-    isPlaying,
+    isPlaying: isFollower ? false : isPlaying,
     onPlayingChange: setIsPlaying,
     manualSpeed,
     onProgress: () => {},
@@ -157,6 +223,9 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   }, [manualSpeed, patchSong]);
 
   const cycleFont = () => {
+    if (isFollower) {
+      return;
+    }
     setFontStep((s) => (s + 1) % FONT_STEPS.length);
   };
 
@@ -168,6 +237,10 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   }, []);
 
   const togglePlay = () => {
+    if (isFollower) {
+      return;
+    }
+
     const el = scrollRef.current;
     if (!el) {
       toast.message("Scroll container is not ready yet.");
@@ -182,6 +255,12 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
     setIsPlaying((p) => !p);
   };
+
+  const syncLabel = syncSession
+    ? isHost
+      ? `Host · ${syncSession.code}`
+      : `Following · ${syncSession.code}`
+    : null;
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
@@ -200,13 +279,30 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-semibold leading-tight">{song.title}</h1>
             <p className="truncate text-sm text-muted-foreground">{song.artist}</p>
+            {syncLabel ? (
+              <p className="truncate text-xs font-medium text-blue-600 dark:text-blue-400">{syncLabel}</p>
+            ) : null}
           </div>
+          <Button
+            type="button"
+            variant={syncSession ? "default" : "outline"}
+            size="icon-lg"
+            className={cn(
+              "min-h-[48px] min-w-[48px] shrink-0",
+              syncSession && "bg-blue-600 text-white hover:bg-blue-600/90",
+            )}
+            onClick={() => setPairOpen(true)}
+            aria-label="Pair devices"
+          >
+            <Link2 className="size-5" />
+          </Button>
           <Button
             type="button"
             variant="outline"
             size="icon-lg"
             className="min-h-[48px] min-w-[48px] shrink-0"
             onClick={cycleFont}
+            disabled={isFollower}
             aria-label="Change font size"
           >
             <Type className="size-5" />
@@ -247,7 +343,10 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
 
       <main
         ref={scrollRef}
-        className="mx-auto min-h-0 w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4"
+        className={cn(
+          "mx-auto min-h-0 w-full max-w-lg flex-1 overflow-y-auto px-4 pb-[calc(14rem+env(safe-area-inset-bottom))] pt-4",
+          isFollower && "touch-pan-y",
+        )}
       >
         <div ref={scrollContentRef}>
           <ChordViewer sections={sections} tabText={tabText} fontSizeClass={fontClass} />
@@ -259,13 +358,32 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
           <ScrollControls
             isPlaying={isPlaying}
             onPlayPause={togglePlay}
-            canPlay={hasScrollableContent}
-            playHint={hasScrollableContent ? null : "No scroll area available for this song yet."}
+            canPlay={hasScrollableContent && !isFollower}
+            playHint={
+              isFollower
+                ? "Following host — playback is controlled on the host device."
+                : hasScrollableContent
+                  ? null
+                  : "No scroll area available for this song yet."
+            }
             manualSpeed={manualSpeed}
             onManualSpeedChange={(value) => setManualSpeed(clampManualSpeed(value))}
+            speedControlsDisabled={isFollower}
           />
         </div>
       </div>
+
+      <PairDialog
+        open={pairOpen}
+        onOpenChange={setPairOpen}
+        songId={song.id}
+        scrollRatio={getScrollRatio()}
+        isPlaying={isPlaying}
+        manualSpeed={manualSpeed}
+        fontStep={fontStep}
+        syncSession={syncSession}
+        onSessionChange={handleSessionChange}
+      />
     </div>
   );
 }
