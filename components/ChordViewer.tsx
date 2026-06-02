@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { wordStart } from "@/lib/chord-layout";
 import type { ChordPosition, ParsedSection } from "@/lib/types";
 
 import { cn } from "@/lib/utils";
@@ -52,7 +53,7 @@ function MonoLyricSegment({ chord, text }: { chord: string | null; text: string 
       >
         {chordRow}
       </span>
-      <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
+      <span className="whitespace-pre-wrap break-words">{text}</span>
     </span>
   );
 }
@@ -96,25 +97,27 @@ function buildChordLyricSegments(
   for (let i = 0; i < sorted.length; i += 1) {
     const current = sorted[i]!;
     const next = sorted[i + 1];
-    const start = current.charIndex;
-    const end = next ? next.charIndex : section.lyrics.length;
+    const segmentStart = wordStart(section.lyrics, current.charIndex);
+    const segmentEnd = next
+      ? wordStart(section.lyrics, next.charIndex)
+      : section.lyrics.length;
 
-    if (start > cursor) {
+    if (segmentStart > cursor) {
       segments.push({
         id: `plain-${i}`,
         chord: null,
-        text: section.lyrics.slice(cursor, start),
+        text: section.lyrics.slice(cursor, segmentStart),
       });
     }
 
-    const chunk = section.lyrics.slice(start, end);
+    const chunk = section.lyrics.slice(segmentStart, segmentEnd);
     segments.push({
       id: `chord-${i}`,
       chord: current.chord,
       text: chunk.length > 0 ? chunk : " ",
     });
 
-    cursor = end;
+    cursor = segmentEnd;
   }
 
   if (cursor < section.lyrics.length) {

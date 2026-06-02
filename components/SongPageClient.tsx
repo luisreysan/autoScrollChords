@@ -16,6 +16,7 @@ import {
 import type { Song, SongContent } from "@/db/schema";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useSyncSession } from "@/hooks/useSyncSession";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { normalizeTabTextForDisplay, parseParsedSectionsJson, sectionsToTabText } from "@/lib/parser";
 import {
   clearSyncSession,
@@ -125,6 +126,8 @@ export function SongPageClient({ song, content, initialSyncCode }: SongPageClien
     setFontStep,
     onRoomLost: handleRoomLost,
   });
+
+  useWakeLock({ enabled: isFollower && syncSession != null });
 
   useEffect(() => {
     const el = scrollRef.current;

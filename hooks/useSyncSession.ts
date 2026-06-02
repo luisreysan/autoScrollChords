@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 
 import type { SyncRoomState, SyncSession } from "@/lib/sync";
@@ -32,11 +33,14 @@ export function useSyncSession({
   setFontStep,
   onRoomLost,
 }: UseSyncSessionOptions) {
+  const router = useRouter();
   const isProgrammaticScrollRef = useRef(false);
   const broadcastTimerRef = useRef<number | null>(null);
   const pollTimerRef = useRef<number | null>(null);
   const pendingScrollRatioRef = useRef<number | null>(null);
   const lastAppliedFontStepRef = useRef(fontStep);
+  const navigatingSongIdRef = useRef<string | null>(null);
+  const previousHostSongIdRef = useRef(songId);
   const stateRef = useRef({ isPlaying, manualSpeed, fontStep, songId });
 
   useEffect(() => {
@@ -71,6 +75,14 @@ export function useSyncSession({
 
   const applyRemoteState = useCallback(
     (state: SyncRoomState) => {
+      if (syncSession?.role === "follower" && state.songId !== songId) {
+        if (navigatingSongIdRef.current !== state.songId) {
+          navigatingSongIdRef.current = state.songId;
+          router.replace(`/songs/${state.songId}?sync=${syncSession.code}`);
+        }
+        return;
+      }
+
       const speed = Number(state.manualSpeed.toFixed(2));
       if (stateRef.current.manualSpeed !== speed) {
         setManualSpeed(speed);
@@ -89,11 +101,27 @@ export function useSyncSession({
 
       applyScrollRatio(state.scrollRatio);
     },
-    [applyScrollRatio, setFontStep, setIsPlaying, setManualSpeed],
+    [
+      applyScrollRatio,
+      router,
+      setFontStep,
+      setIsPlaying,
+      setManualSpeed,
+      songId,
+      syncSession?.code,
+      syncSession?.role,
+    ],
   );
 
   useEffect(() => {
+    if (syncSession?.role === "follower" && navigatingSongIdRef.current === songId) {
+      navigatingSongIdRef.current = null;
+    }
+  }, [songId, syncSession?.role]);
+
+  useEffect(() => {
     if (syncSession?.role !== "follower") {
+      navigatingSongIdRef.current = null;
       return;
     }
     if (pendingScrollRatioRef.current == null) {
@@ -113,35 +141,40 @@ export function useSyncSession({
     };
   }, [fontStep, syncSession?.role, applyScrollRatio]);
 
-  const broadcastNow = useCallback(async () => {
-    if (!syncSession || syncSession.role !== "host" || !syncSession.hostSecret) {
-      return;
-    }
-    const { isPlaying: playing, manualSpeed: speed, fontStep: step, songId: currentSongId } =
-      stateRef.current;
-
-    try {
-      const res = await fetch(`/api/sync/rooms/${syncSession.code}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-host-secret": syncSession.hostSecret,
-        },
-        body: JSON.stringify({
-          songId: currentSongId,
-          scrollRatio: getScrollRatio(),
-          isPlaying: playing,
-          manualSpeed: speed,
-          fontStep: step,
-        }),
-      });
-      if (res.status === 403 || res.status === 404) {
-        onRoomLost?.();
+  const broadcastNow = useCallback(
+    async (scrollRatioOverride?: number) => {
+      if (!syncSession || syncSession.role !== "host" || !syncSession.hostSecret) {
+        return;
       }
-    } catch {
-      // ignore transient network errors
-    }
-  }, [getScrollRatio, onRoomLost, syncSession]);
+      const { isPlaying: playing, manualSpeed: speed, fontStep: step, songId: currentSongId } =
+        stateRef.current;
+      const scrollRatio =
+        scrollRatioOverride !== undefined ? scrollRatioOverride : getScrollRatio();
+
+      try {
+        const res = await fetch(`/api/sync/rooms/${syncSession.code}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-host-secret": syncSession.hostSecret,
+          },
+          body: JSON.stringify({
+            songId: currentSongId,
+            scrollRatio,
+            isPlaying: playing,
+            manualSpeed: speed,
+            fontStep: step,
+          }),
+        });
+        if (res.status === 403 || res.status === 404) {
+          onRoomLost?.();
+        }
+      } catch {
+        // ignore transient network errors
+      }
+    },
+    [getScrollRatio, onRoomLost, syncSession],
+  );
 
   const scheduleBroadcast = useCallback(() => {
     if (!syncSession || syncSession.role !== "host") {
@@ -187,10 +220,19 @@ export function useSyncSession({
 
   useEffect(() => {
     if (!syncSession || syncSession.role !== "host") {
+      previousHostSongIdRef.current = songId;
       return;
     }
-    scheduleBroadcast();
-  }, [isPlaying, manualSpeed, fontStep, songId, scheduleBroadcast, syncSession]);
+
+    const songChanged = previousHostSongIdRef.current !== songId;
+    previousHostSongIdRef.current = songId;
+
+    if (songChanged) {
+      void broadcastNow(0);
+    } else {
+      scheduleBroadcast();
+    }
+  }, [broadcastNow, isPlaying, manualSpeed, fontStep, scheduleBroadcast, songId, syncSession]);
 
   useEffect(() => {
     if (!syncSession || syncSession.role !== "host" || !isPlaying) {
