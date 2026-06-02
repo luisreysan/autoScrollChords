@@ -42,6 +42,35 @@ function ChordToken({ chord }: { chord: string }) {
   );
 }
 
+function MonoLyricSegment({ chord, text }: { chord: string | null; text: string }) {
+  const chordRow = chord ?? "\u00a0";
+  return (
+    <span className="inline-flex max-w-full flex-col align-top">
+      <span
+        className={cn("font-bold leading-none whitespace-pre", !chord && "invisible select-none")}
+        aria-hidden={!chord ? true : undefined}
+      >
+        {chordRow}
+      </span>
+      <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
+    </span>
+  );
+}
+
+function renderChordLyricSegmentRow(segments: ChordLyricSegment[], keyPrefix: string) {
+  return (
+    <div className="flex flex-wrap items-end gap-x-0 gap-y-1">
+      {segments.map((segment) => (
+        <MonoLyricSegment
+          key={`${keyPrefix}-${segment.id}`}
+          chord={segment.chord}
+          text={segment.text}
+        />
+      ))}
+    </div>
+  );
+}
+
 function buildChordLyricSegments(
   section: Extract<ParsedSection, { type: "line" }>,
 ): ChordLyricSegment[] {
@@ -136,23 +165,7 @@ function renderMonoChordLyricSegments(chordLine: string, lyricLine: string, bloc
     ...(chordPositions.length > 0 ? { chordPositions } : {}),
   };
   const segments = buildChordLyricSegments(section);
-
-  return (
-    <div className="flex flex-wrap items-start gap-x-0 gap-y-1">
-      {segments.map((segment) =>
-        segment.chord ? (
-          <span key={`${blockKey}-${segment.id}`} className="inline-flex max-w-full flex-col align-top">
-            <span className="font-bold leading-none whitespace-pre">{segment.chord}</span>
-            <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</span>
-          </span>
-        ) : (
-          <span key={`${blockKey}-${segment.id}`} className="whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {segment.text}
-          </span>
-        ),
-      )}
-    </div>
-  );
+  return renderChordLyricSegmentRow(segments, blockKey);
 }
 
 function renderTabTextBlocks(lines: string[]): ReactNode[] {
@@ -258,25 +271,7 @@ export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", cl
         return (
           <div key={`l-${idx}`} className="mb-4">
             {section.chordPositions && section.chordPositions.length > 0 ? (
-              <div className="mb-1 flex flex-wrap items-start gap-x-0 gap-y-1">
-                {buildChordLyricSegments(section).map((segment) =>
-                  segment.chord ? (
-                    <span key={`${idx}-${segment.id}`} className="inline-flex max-w-full flex-col align-top">
-                      <span className="mb-0.5 leading-none">
-                        <ChordToken chord={segment.chord} />
-                      </span>
-                      <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</span>
-                    </span>
-                  ) : (
-                    <span
-                      key={`${idx}-${segment.id}`}
-                      className="whitespace-pre-wrap [overflow-wrap:anywhere]"
-                    >
-                      {segment.text}
-                    </span>
-                  ),
-                )}
-              </div>
+              <div className="mb-1">{renderChordLyricSegmentRow(buildChordLyricSegments(section), `l-${idx}`)}</div>
             ) : section.chords.length > 0 ? (
               <div className="mb-1 flex flex-wrap gap-x-2 gap-y-1">
                 {section.chords.map((c, i) => (

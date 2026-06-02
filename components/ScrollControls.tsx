@@ -3,13 +3,17 @@
 import { Minus, Pause, Play, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
 import { cn } from "@/lib/utils";
 
 const MIN_MANUAL_SPEED = 0.1;
 const MAX_MANUAL_SPEED = 30.0;
 const MANUAL_SPEED_STEP = 0.05;
+
+const speedButtonClassName = cn(
+  "h-14 min-h-[48px] min-w-[56px] rounded-full px-6 text-base shadow-md",
+  "bg-muted text-foreground hover:bg-muted/80",
+);
 
 type ScrollControlsProps = {
   isPlaying: boolean;
@@ -55,38 +59,32 @@ export function ScrollControls({
         >
           {isPlaying ? <Pause className="size-8" /> : <Play className="size-8 pl-0.5" />}
         </Button>
-        <div className="flex flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <Label>Speed</Label>
-              <span className="font-mono tabular-nums">{clampedManualSpeed.toFixed(2)}</span>
-            </div>
-            <div className="flex h-11 items-center rounded-full border border-input bg-background px-2">
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"
-                onClick={() => adjustManualSpeed(-MANUAL_SPEED_STEP)}
-                aria-label="Decrease manual speed"
-              >
-                <Minus className="size-4" />
-              </button>
-              <span
-                className="flex h-full flex-1 items-center justify-center px-2 text-center font-mono text-base tabular-nums"
-                aria-live="polite"
-                aria-label={`Speed ${clampedManualSpeed.toFixed(2)}`}
-              >
-                {clampedManualSpeed.toFixed(2)}
-              </span>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"
-                onClick={() => adjustManualSpeed(MANUAL_SPEED_STEP)}
-                aria-label="Increase manual speed"
-              >
-                <Plus className="size-4" />
-              </button>
-            </div>
-          </div>
+        <div className="flex flex-1 items-center justify-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            className={speedButtonClassName}
+            onClick={() => adjustManualSpeed(-MANUAL_SPEED_STEP)}
+            aria-label="Decrease manual speed"
+          >
+            <Minus className="size-6" />
+          </Button>
+          <span
+            className="min-w-[4rem] text-center font-mono text-lg tabular-nums"
+            aria-live="polite"
+            aria-label={`Speed ${clampedManualSpeed.toFixed(2)}`}
+          >
+            {clampedManualSpeed.toFixed(2)}
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            className={speedButtonClassName}
+            onClick={() => adjustManualSpeed(MANUAL_SPEED_STEP)}
+            aria-label="Increase manual speed"
+          >
+            <Plus className="size-6" />
+          </Button>
         </div>
       </div>
       {playHint ? <p className="text-center text-xs text-muted-foreground">{playHint}</p> : null}
