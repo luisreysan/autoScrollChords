@@ -1,6 +1,8 @@
 "use client";
 
-import type { ParsedSection } from "@/lib/types";
+import type { ReactNode } from "react";
+
+import type { ChordPosition, ParsedSection } from "@/lib/types";
 
 import { cn } from "@/lib/utils";
 
@@ -97,25 +99,138 @@ function buildChordLyricSegments(
   return segments.length > 0 ? segments : [{ id: "plain-fallback", chord: null, text: section.lyrics }];
 }
 
+function isSectionHeaderLine(line: string): boolean {
+  return /^\[[^\]]+\]$/.test(line.trim());
+}
+
+function extractChordPositionsFromLine(chordLine: string): ChordPosition[] {
+  const out: ChordPosition[] = [];
+  const tokenRe = /\S+/g;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(chordLine)) !== null) {
+    const token = match[0];
+    if (CHORD_TOKEN.test(token)) {
+      out.push({ chord: token, charIndex: match.index });
+    }
+  }
+  return out;
+}
+
+function canPairChordLineWithNext(chordLine: string, nextLine: string | undefined): boolean {
+  if (!isChordOnlyLine(chordLine) || nextLine === undefined) {
+    return false;
+  }
+  const next = nextLine.trim();
+  if (!next || isSectionHeaderLine(nextLine) || isChordOnlyLine(nextLine)) {
+    return false;
+  }
+  return true;
+}
+
+function renderMonoChordLyricSegments(chordLine: string, lyricLine: string, blockKey: string) {
+  const chordPositions = extractChordPositionsFromLine(chordLine);
+  const section: Extract<ParsedSection, { type: "line" }> = {
+    type: "line",
+    chords: chordPositions.map((cp) => cp.chord),
+    lyrics: lyricLine,
+    ...(chordPositions.length > 0 ? { chordPositions } : {}),
+  };
+  const segments = buildChordLyricSegments(section);
+
+  return (
+    <div className="flex flex-wrap items-start gap-x-0 gap-y-1">
+      {segments.map((segment) =>
+        segment.chord ? (
+          <span key={`${blockKey}-${segment.id}`} className="inline-flex max-w-full flex-col align-top">
+            <span className="font-bold leading-none whitespace-pre">{segment.chord}</span>
+            <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</span>
+          </span>
+        ) : (
+          <span key={`${blockKey}-${segment.id}`} className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+            {segment.text}
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+function renderTabTextBlocks(lines: string[]): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  let blockIdx = 0;
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+
+    if (line.trim() === "") {
+      nodes.push(<br key={`br-${blockIdx}`} />);
+      i += 1;
+      blockIdx += 1;
+      continue;
+    }
+
+    if (isSectionHeaderLine(line)) {
+      nodes.push(
+        <span key={`hdr-${blockIdx}`} className="block whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {line}
+        </span>,
+      );
+      i += 1;
+      blockIdx += 1;
+      continue;
+    }
+
+    if (canPairChordLineWithNext(line, lines[i + 1])) {
+      const lyricLine = lines[i + 1] ?? "";
+      nodes.push(
+        <div key={`pair-${blockIdx}`} className="block">
+          {renderMonoChordLyricSegments(line, lyricLine, `pair-${blockIdx}`)}
+        </div>,
+      );
+      i += 2;
+      blockIdx += 1;
+      continue;
+    }
+
+    if (isChordOnlyLine(line)) {
+      nodes.push(
+        <span
+          key={`chord-${blockIdx}`}
+          className="block font-bold whitespace-pre-wrap [overflow-wrap:anywhere]"
+        >
+          {line}
+        </span>,
+      );
+      i += 1;
+      blockIdx += 1;
+      continue;
+    }
+
+    nodes.push(
+      <span key={`txt-${blockIdx}`} className="block whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {line}
+      </span>,
+    );
+    i += 1;
+    blockIdx += 1;
+  }
+
+  return nodes;
+}
+
 export function ChordViewer({ sections, tabText, fontSizeClass = "text-base", className }: ChordViewerProps) {
   if (tabText && tabText.trim().length > 0) {
     const lines = tabText.replace(/\r\n/g, "\n").split("\n");
     return (
       <div
         className={cn(
-          "max-w-full overflow-x-hidden font-mono leading-[1.8] text-foreground",
+          "max-w-full overflow-x-hidden font-mono leading-[1.8] text-foreground break-words",
           fontSizeClass,
           className,
         )}
       >
-        <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent p-0">
-          {lines.map((line, idx) => (
-            <span key={`pre-line-${idx}`} className={isChordOnlyLine(line) ? "font-bold" : undefined}>
-              {line}
-              {idx < lines.length - 1 ? "\n" : ""}
-            </span>
-          ))}
-        </pre>
+        {renderTabTextBlocks(lines)}
       </div>
     );
   }

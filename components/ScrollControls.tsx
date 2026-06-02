@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const MIN_MANUAL_SPEED = 0.1;
 const MAX_MANUAL_SPEED = 30.0;
-const MANUAL_SPEED_STEP = 0.1;
+const MANUAL_SPEED_STEP = 0.05;
 
 type ScrollControlsProps = {
   isPlaying: boolean;
@@ -29,13 +29,13 @@ export function ScrollControls({
   onManualSpeedChange,
 }: ScrollControlsProps) {
   const clampedManualSpeed = Number(
-    Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, manualSpeed)).toFixed(1),
+    Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, manualSpeed)).toFixed(2),
   );
 
   const adjustManualSpeed = (delta: number) => {
     const next = clampedManualSpeed + delta;
     onManualSpeedChange(
-      Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, next)).toFixed(1)),
+      Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, next)).toFixed(2)),
     );
   };
 
@@ -58,8 +58,8 @@ export function ScrollControls({
         <div className="flex flex-1 flex-col gap-2">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <Label htmlFor="manual-speed-input">Speed</Label>
-              <span className="font-mono tabular-nums">{clampedManualSpeed.toFixed(1)}</span>
+              <Label>Speed</Label>
+              <span className="font-mono tabular-nums">{clampedManualSpeed.toFixed(2)}</span>
             </div>
             <div className="flex h-11 items-center rounded-full border border-input bg-background px-2">
               <button
@@ -70,27 +70,13 @@ export function ScrollControls({
               >
                 <Minus className="size-4" />
               </button>
-              <input
-                id="manual-speed-input"
-                type="text"
-                inputMode="decimal"
-                className="h-full w-full border-none bg-transparent px-2 text-center font-mono text-base tabular-nums outline-none"
-                value={clampedManualSpeed.toFixed(1)}
-                onChange={(e) => {
-                  const normalized = e.target.value.replace(",", ".").trim();
-                  if (!normalized) {
-                    return;
-                  }
-                  const parsed = Number.parseFloat(normalized);
-                  if (Number.isFinite(parsed)) {
-                    onManualSpeedChange(
-                      Number(
-                        Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, parsed)).toFixed(1),
-                      ),
-                    );
-                  }
-                }}
-              />
+              <span
+                className="flex h-full flex-1 items-center justify-center px-2 text-center font-mono text-base tabular-nums"
+                aria-live="polite"
+                aria-label={`Speed ${clampedManualSpeed.toFixed(2)}`}
+              >
+                {clampedManualSpeed.toFixed(2)}
+              </span>
               <button
                 type="button"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/80"

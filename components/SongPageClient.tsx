@@ -35,16 +35,10 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [manualSpeed, setManualSpeed] = useState(() => {
     const s = song.scrollSpeed;
-    if (typeof s === "number" && Number.isFinite(s)) {
-      // Backward compatibility:
-      // Previous decimal range was 0.1..3.0. New range is 0.1..30.0 where 1.0 ~= old 0.1.
-      if (s > 0 && s <= 3) {
-        return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s * 10)).toFixed(1));
-      }
-      // Older integer-style values (and already-migrated values) remain valid in new range.
-      return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s)).toFixed(1));
+    if (typeof s === "number" && Number.isFinite(s) && s > 0) {
+      return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, s)).toFixed(2));
     }
-    return 1.0;
+    return 0.2;
   });
 
   const [hasScrollableContent, setHasScrollableContent] = useState(true);
@@ -170,7 +164,7 @@ export function SongPageClient({ song, content }: SongPageClientProps) {
     if (!Number.isFinite(value)) {
       return MIN_MANUAL_SPEED;
     }
-    return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, value)).toFixed(1));
+    return Number(Math.min(MAX_MANUAL_SPEED, Math.max(MIN_MANUAL_SPEED, value)).toFixed(2));
   }, []);
 
   const togglePlay = () => {
