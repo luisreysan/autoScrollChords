@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+const SCROLL_SYNC_EPSILON_PX = 2;
+
 type UseAutoScrollOptions = {
   scrollRef: React.RefObject<HTMLElement | null>;
   isPlaying: boolean;
@@ -22,6 +24,7 @@ export function useAutoScroll({
   const pxPerMsRef = useRef(0);
   const manualSpeedRef = useRef(manualSpeed);
   const virtualScrollTopRef = useRef(0);
+  const isProgrammaticScrollRef = useRef(false);
   const loopRunningRef = useRef(false);
   const debugUntilRef = useRef(0);
 
@@ -88,6 +91,15 @@ export function useAutoScroll({
       });
     }
 
+    const onUserScroll = () => {
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+      virtualScrollTopRef.current = el.scrollTop;
+    };
+
+    el.addEventListener("scroll", onUserScroll, { passive: true });
+
     const tick = (now: number) => {
       const elInner = scrollRef.current;
       if (!elInner) {
@@ -114,11 +126,17 @@ export function useAutoScroll({
       const clampedSpeed = Math.min(30, Math.max(0.1, manualSpeedRef.current));
       pxPerMsRef.current = clampedSpeed * 0.05;
 
+      if (Math.abs(elInner.scrollTop - virtualScrollTopRef.current) > SCROLL_SYNC_EPSILON_PX) {
+        virtualScrollTopRef.current = elInner.scrollTop;
+      }
+
       virtualScrollTopRef.current = Math.min(
         max,
         Math.max(0, virtualScrollTopRef.current + pxPerMsRef.current * dt),
       );
+      isProgrammaticScrollRef.current = true;
       elInner.scrollTop = virtualScrollTopRef.current;
+      isProgrammaticScrollRef.current = false;
 
       const progress = max > 0 ? Math.min(1, elInner.scrollTop / max) : 1;
       onProgress(progress);
@@ -147,6 +165,7 @@ export function useAutoScroll({
     }
 
     return () => {
+      el.removeEventListener("scroll", onUserScroll);
       stopRaf();
     };
   }, [
